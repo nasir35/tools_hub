@@ -28,8 +28,12 @@ const statusConfig = {
   Rejected: { color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: XCircle },
 };
 
+import { useRouter } from "next/navigation";
+
 export default function UniversityCard({ university, onEdit }: UniversityCardProps) {
+  const router = useRouter();
   const StatusIcon = statusConfig[university.status].icon;
+  const coverImage = university.images && university.images.length > 0 ? university.images[0] : null;
 
   return (
     <motion.div
@@ -37,81 +41,72 @@ export default function UniversityCard({ university, onEdit }: UniversityCardPro
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="group relative bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col h-full overflow-hidden"
+      onClick={() => router.push(`/tools/university-tracker/${university._id}`)}
+      className="group cursor-pointer relative bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col h-full overflow-hidden"
     >
-      {/* Background Decor */}
-      <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-full blur-2xl opacity-50 group-hover:opacity-100 transition-opacity" />
-
-      {/* Header */}
-      <div className="flex justify-between items-start mb-4 relative z-10">
-        <div>
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white line-clamp-1">{university.name}</h3>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">{university.program}</p>
-        </div>
-        <button
-          onClick={() => onEdit(university)}
-          className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-        >
-          <Edit className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Tags / Badges */}
-      <div className="flex flex-wrap gap-2 mb-6 relative z-10">
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${statusConfig[university.status].color}`}>
-          <StatusIcon className="w-3.5 h-3.5" />
-          {university.status}
-        </span>
-        {university.location && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            <MapPin className="w-3.5 h-3.5" />
-            <span className="max-w-[100px] truncate">{university.location}</span>
-          </span>
-        )}
-      </div>
-
-      {/* Body / Info */}
-      <div className="space-y-3 mb-6 flex-1 relative z-10">
-        {university.deadline && (
-          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-            <CalendarDays className="w-4 h-4 text-slate-400" />
-            <span>Deadline: <strong className="font-medium text-slate-800 dark:text-slate-200">{new Date(university.deadline).toLocaleDateString()}</strong></span>
-          </div>
-        )}
-        
-        {university.requirements && university.requirements.length > 0 && (
-          <div className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
-            <FileText className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-            <div className="flex flex-wrap gap-1">
-              {university.requirements.slice(0, 3).map((req, idx) => (
-                <span key={idx} className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-xs">
-                  {req}
-                </span>
-              ))}
-              {university.requirements.length > 3 && (
-                <span className="text-xs text-slate-400 px-1 py-0.5">+{university.requirements.length - 3} more</span>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Footer / Images preview */}
-      <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 relative z-10">
-        {university.images && university.images.length > 0 ? (
-          <div className="flex items-center gap-2">
-            <div className="flex -space-x-2 overflow-hidden">
-              {university.images.slice(0, 3).map((img, i) => (
-                <img key={i} src={img} alt="Preview" className="inline-block h-8 w-8 rounded-full ring-2 ring-white dark:ring-slate-900 object-cover" />
-              ))}
-            </div>
-            {university.images.length > 3 && (
-              <span className="text-xs font-medium text-slate-500">+{university.images.length - 3} images</span>
-            )}
-          </div>
+      {/* Cover Photo */}
+      <div className="w-full h-48 relative bg-slate-100 dark:bg-slate-800 overflow-hidden">
+        {coverImage ? (
+          <img src={coverImage} alt={university.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         ) : (
-          <div className="text-xs text-slate-400 italic">No images saved</div>
+          <div className="w-full h-full flex items-center justify-center">
+            <School className="w-12 h-12 text-slate-300 dark:text-slate-700" />
+          </div>
         )}
+        <div className="absolute top-3 right-3 z-10 flex gap-2">
+           <button
+             onClick={(e) => {
+               e.stopPropagation();
+               onEdit(university);
+             }}
+             className="p-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 rounded-full shadow-sm transition-colors"
+           >
+             <Edit className="w-4 h-4" />
+           </button>
+        </div>
+        <div className="absolute top-3 left-3 z-10">
+           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${statusConfig[university.status].color} bg-opacity-90 backdrop-blur-sm`}>
+             <StatusIcon className="w-3.5 h-3.5" />
+             {university.status}
+           </span>
+        </div>
+      </div>
+
+      <div className="p-5 flex flex-col flex-1">
+        {/* Header */}
+        <div className="mb-4">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{university.name}</h3>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">{university.program}</p>
+        </div>
+
+        {/* Body / Info */}
+        <div className="space-y-3 mb-4 flex-1">
+          {university.location && (
+            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+              <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="truncate">{university.location}</span>
+            </div>
+          )}
+          
+          {university.deadline && (
+            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+              <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
+              <span>Deadline: <strong className="font-medium text-slate-800 dark:text-slate-200">{new Date(university.deadline).toLocaleDateString()}</strong></span>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+           <div className="text-xs text-slate-500">
+              {university.requirements.length} Requirements
+           </div>
+           {university.images.length > 1 && (
+             <div className="text-xs font-medium text-blue-600 dark:text-blue-400">
+               +{university.images.length - 1} photos
+             </div>
+           )}
+        </div>
       </div>
     </motion.div>
   );

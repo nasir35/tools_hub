@@ -65,12 +65,13 @@ export default function UniversityFormModal({ isOpen, onClose, onSave, universit
     setFormData({ ...formData, requirements: newReqs });
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const [isDragging, setIsDragging] = useState(false);
 
-    // Convert each file to base64
-    Array.from(files).forEach(file => {
+  const processFiles = (files: FileList | File[] | null) => {
+    if (!files) return;
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
+    
+    imageFiles.forEach(file => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFormData(prev => ({
@@ -80,6 +81,32 @@ export default function UniversityFormModal({ isOpen, onClose, onSave, universit
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processFiles(e.target.files);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    processFiles(e.dataTransfer.files);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      processFiles(e.clipboardData.files);
+    }
   };
 
   const handleRemoveImage = (index: number) => {
@@ -110,6 +137,7 @@ export default function UniversityFormModal({ isOpen, onClose, onSave, universit
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            onPaste={handlePaste}
             className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
           >
             <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
@@ -242,8 +270,16 @@ export default function UniversityFormModal({ isOpen, onClose, onSave, universit
                 </div>
 
                 {/* Images */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Images (Screenshots, Campus, etc.)</label>
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`p-4 -mx-4 rounded-2xl border-2 transition-all ${isDragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-transparent'}`}
+                >
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Images (Screenshots, Campus, etc.)
+                  </label>
+                  <p className="text-xs text-slate-500 mb-4">You can click to upload, drag and drop, or simply paste an image here.</p>
                   <input
                     type="file"
                     multiple

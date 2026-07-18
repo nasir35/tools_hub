@@ -5,6 +5,7 @@ import { Plus, Loader2, GraduationCap, School } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import UniversityCard, { University } from "./components/UniversityCard";
 import UniversityFormModal from "./components/UniversityFormModal";
+import toast, { Toaster } from "react-hot-toast";
 
 export default function UniversityTrackerPage() {
   const [universities, setUniversities] = useState<University[]>([]);
@@ -43,6 +44,12 @@ export default function UniversityTrackerPage() {
         if (res.ok) {
           const updated = await res.json();
           setUniversities(universities.map(u => (u._id === updated._id ? updated : u)));
+          toast.success("University updated successfully!");
+          setIsModalOpen(false);
+          setEditingUniversity(null);
+        } else {
+          const err = await res.json();
+          toast.error(err.message || "Failed to update university");
         }
       } else {
         const res = await fetch("/api/tools/universities", {
@@ -53,12 +60,17 @@ export default function UniversityTrackerPage() {
         if (res.ok) {
           const created = await res.json();
           setUniversities([created, ...universities]);
+          toast.success("University added successfully!");
+          setIsModalOpen(false);
+          setEditingUniversity(null);
+        } else {
+          const err = await res.json();
+          toast.error(err.message || "Failed to add university");
         }
       }
-      setIsModalOpen(false);
-      setEditingUniversity(null);
     } catch (error) {
       console.error("Failed to save university:", error);
+      toast.error("An unexpected error occurred.");
     }
     setIsSaving(false);
   };
@@ -151,6 +163,7 @@ export default function UniversityTrackerPage() {
         university={editingUniversity}
         isLoading={isSaving}
       />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

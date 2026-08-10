@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { jsPDF } from "jspdf";
-import imageCompression from "browser-image-compression";
 
 export type FilterType = "original" | "grayscale" | "blackwhite" | "magic";
 
@@ -97,6 +95,9 @@ function applyFilterToCanvas(
 }
 
 async function fileToDataUrl(file: File): Promise<string> {
+  // Dynamic import to avoid SSR/build failures — browser-image-compression
+  // accesses window/document at module evaluation time.
+  const { default: imageCompression } = await import("browser-image-compression");
   const compressed = await imageCompression(file, {
     maxSizeMB: 5,
     maxWidthOrHeight: 2480,
@@ -272,6 +273,9 @@ export function usePdfScanner() {
       const docW = orientation === "portrait" ? pw : ph;
       const docH = orientation === "portrait" ? ph : pw;
 
+      // Dynamic import — jsPDF accesses `document` at module load time,
+      // which crashes Next.js SSR/static builds (e.g. Netlify).
+      const { jsPDF } = await import("jspdf");
       const pdf = new jsPDF({
         orientation,
         unit: "pt",

@@ -79,3 +79,36 @@ export interface TabItem {
   totalPages: number;
   nasPanelOpen: boolean;
 }
+
+export interface AttachmentItem {
+  filename?: string;
+  type?: string;
+  path: string;
+  folder?: string | null;
+  publicId?: string | null;
+  size?: number;
+}
+
+export interface ProjectEntry {
+  id: string;
+  userId: string;
+  name: string;
+  color?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface NoteEntry {
+  id: string;
+  userId: string;
+  projectId?: string | null;
+  title: string;
+  content: string;
+  attachments?: AttachmentItem[];
+  attachmentFolder?: string | null;
+  thumbnail?: string | null;
+  pinned?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+

@@ -41,3 +41,33 @@ export const toPlainSession = (doc: any) => {
     snips: obj.snips || [],
   };
 };
+
+export const toPlainNote = (doc: any) => {
+  const obj = doc.toObject ? doc.toObject() : { ...doc };
+  return {
+    id: obj.nid,
+    userId: obj.userId,
+    projectId: obj.projectId || null,
+    title: obj.title || "",
+    content: obj.content || "",
+    attachments: obj.attachments || [],
+    attachmentFolder: obj.attachmentFolder || null,
+    thumbnail: obj.thumbnail || null,
+    pinned: !!obj.pinned,
+    createdAt: normalizeTimestamp(obj.createdAt),
+    updatedAt: normalizeTimestamp(obj.updatedAt),
+  };
+};
+
+export const toPlainProject = (doc: any) => {
+  const obj = doc.toObject ? doc.toObject() : { ...doc };
+  return {
+    id: obj.pid,
+    userId: obj.userId,
+    name: obj.name,
+    color: obj.color || "#6366f1",
+    createdAt: normalizeTimestamp(obj.createdAt),
+    updatedAt: normalizeTimestamp(obj.updatedAt),
+  };
+};
+

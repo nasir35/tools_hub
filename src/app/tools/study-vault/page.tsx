@@ -29,6 +29,8 @@ import {
   Menu,
   BarChart3,
   Filter,
+  Sun,
+  Moon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -58,6 +60,24 @@ export default function StudyVaultApp() {
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [studyTimes, setStudyTimes] = useState<StudyTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Theme state: defaults to false (Light Mode) matching original study-vault-v10
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("studyVaultDarkMode");
+    if (saved !== null) {
+      setIsDarkMode(saved === "true");
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("studyVaultDarkMode", String(next));
+      return next;
+    });
+  };
 
   // Navigation and Views
   const [activeView, setActiveView] = useState<"notes" | "pdfs" | "sessions" | "summary">("notes");
@@ -494,54 +514,91 @@ export default function StudyVaultApp() {
             toast("Opening document in study reader…");
           }
         }}
+        isDarkMode={isDarkMode}
       />
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col sm:flex-row overflow-hidden">
+    <div
+      className={`fixed inset-0 z-40 w-screen h-screen overflow-hidden flex flex-col sm:flex-row ${
+        isDarkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
+      }`}
+    >
       {/* ── Collapsible Left Sidebar ── */}
       <div
         className={`${
           sidebarOpen ? "w-64" : "w-16"
-        } transition-all duration-300 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 min-h-screen`}
+        } transition-all duration-300 ${
+          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+        } border-r flex flex-col shrink-0 h-full select-none`}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div
+          className={`p-4 border-b ${
+            isDarkMode ? "border-slate-800" : "border-slate-200"
+          } flex items-center justify-between`}
+        >
           {sidebarOpen ? (
             <div className="flex items-center gap-2.5">
               <Link
                 href="/"
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                className={`p-1.5 rounded-lg transition ${
+                  isDarkMode
+                    ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                }`}
                 title="Back to Tools Hub"
               >
                 <ArrowLeft size={16} />
               </Link>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center font-bold">
+                <div className="w-8 h-8 rounded-xl bg-blue-600/15 text-blue-600 dark:bg-blue-600/20 dark:text-blue-400 flex items-center justify-center font-bold">
                   <BookOpen size={16} />
                 </div>
-                <span className="font-bold text-sm text-white">Study Vault</span>
+                <span className={`font-bold text-sm ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                  Study Vault
+                </span>
               </div>
             </div>
           ) : (
             <Link
               href="/"
-              className="p-2 text-slate-400 hover:text-white mx-auto"
+              className={`p-2 rounded-lg mx-auto ${
+                isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
+              }`}
               title="Back to Tools Hub"
             >
               <ArrowLeft size={18} />
             </Link>
           )}
 
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition"
-            title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-          >
-            <Menu size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className={`p-1.5 rounded-lg transition ${
+                isDarkMode
+                  ? "text-amber-400 hover:text-amber-300 hover:bg-slate-800"
+                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              }`}
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`p-1.5 rounded-lg transition ${
+                isDarkMode
+                  ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              }`}
+              title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            >
+              <Menu size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Navigation Sections */}
@@ -554,7 +611,9 @@ export default function StudyVaultApp() {
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-semibold transition ${
                 activeView === "notes"
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : isDarkMode
+                  ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               }`}
             >
               <FileText size={16} />
@@ -567,7 +626,9 @@ export default function StudyVaultApp() {
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-semibold transition ${
                 activeView === "pdfs"
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : isDarkMode
+                  ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               }`}
             >
               <BookOpen size={16} />
@@ -580,7 +641,9 @@ export default function StudyVaultApp() {
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-semibold transition ${
                 activeView === "sessions"
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : isDarkMode
+                  ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               }`}
             >
               <Layers size={16} />
@@ -593,7 +656,9 @@ export default function StudyVaultApp() {
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-semibold transition ${
                 activeView === "summary"
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : isDarkMode
+                  ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               }`}
             >
               <BarChart3 size={16} />
@@ -603,8 +668,12 @@ export default function StudyVaultApp() {
 
           {/* Subjects / Projects Folder List */}
           {sidebarOpen && (
-            <div className="pt-3 border-t border-slate-800 space-y-2">
-              <div className="flex items-center justify-between text-slate-400 px-2 font-bold uppercase tracking-wider text-[10px]">
+            <div className={`pt-3 border-t ${isDarkMode ? "border-slate-800" : "border-slate-200"} space-y-2`}>
+              <div
+                className={`flex items-center justify-between px-2 font-bold uppercase tracking-wider text-[10px] ${
+                  isDarkMode ? "text-slate-400" : "text-slate-500"
+                }`}
+              >
                 <span>Subjects</span>
                 <button
                   type="button"
@@ -612,7 +681,9 @@ export default function StudyVaultApp() {
                     setEditingProject(null);
                     setShowProjectModal(true);
                   }}
-                  className="p-1 hover:text-white rounded hover:bg-slate-800"
+                  className={`p-1 rounded transition ${
+                    isDarkMode ? "hover:text-white hover:bg-slate-800" : "hover:text-slate-900 hover:bg-slate-200"
+                  }`}
                   title="Create new subject"
                 >
                   <Plus size={13} />
@@ -625,12 +696,20 @@ export default function StudyVaultApp() {
                   onClick={() => setActiveProject("all")}
                   className={`w-full text-left px-3 py-1.5 rounded-xl font-medium transition flex items-center justify-between ${
                     activeProject === "all"
-                      ? "bg-slate-800 text-blue-400 font-bold"
-                      : "text-slate-300 hover:bg-slate-800/60"
+                      ? isDarkMode
+                        ? "bg-slate-800 text-blue-400 font-bold"
+                        : "bg-blue-50 text-blue-700 font-bold"
+                      : isDarkMode
+                      ? "text-slate-300 hover:bg-slate-800/60"
+                      : "text-slate-700 hover:bg-slate-100"
                   }`}
                 >
                   <span>All Subjects</span>
-                  <span className="text-[10px] text-slate-500 font-mono">
+                  <span
+                    className={`text-[10px] font-mono ${
+                      isDarkMode ? "text-slate-500" : "text-slate-400"
+                    }`}
+                  >
                     {notes.length}
                   </span>
                 </button>
@@ -644,8 +723,12 @@ export default function StudyVaultApp() {
                       key={proj.id}
                       className={`group flex items-center justify-between px-3 py-1.5 rounded-xl transition cursor-pointer ${
                         isSelected
-                          ? "bg-slate-800 text-white font-bold"
-                          : "text-slate-300 hover:bg-slate-800/60"
+                          ? isDarkMode
+                            ? "bg-slate-800 text-white font-bold"
+                            : "bg-blue-50 text-blue-900 font-bold"
+                          : isDarkMode
+                          ? "text-slate-300 hover:bg-slate-800/60"
+                          : "text-slate-700 hover:bg-slate-100"
                       }`}
                       onClick={() => setActiveProject(proj)}
                     >
@@ -658,7 +741,11 @@ export default function StudyVaultApp() {
                       </div>
 
                       <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-slate-500 font-mono group-hover:hidden">
+                        <span
+                          className={`text-[10px] font-mono group-hover:hidden ${
+                            isDarkMode ? "text-slate-500" : "text-slate-400"
+                          }`}
+                        >
                           {count}
                         </span>
                         <div className="hidden group-hover:flex items-center gap-0.5">
@@ -669,7 +756,9 @@ export default function StudyVaultApp() {
                               setEditingProject(proj);
                               setShowProjectModal(true);
                             }}
-                            className="p-0.5 text-slate-400 hover:text-white rounded"
+                            className={`p-0.5 rounded ${
+                              isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900"
+                            }`}
                             title="Edit subject"
                           >
                             <Edit3 size={11} />
@@ -680,7 +769,9 @@ export default function StudyVaultApp() {
                               e.stopPropagation();
                               handleDeleteProject(proj.id, proj.name);
                             }}
-                            className="p-0.5 text-slate-400 hover:text-red-400 rounded"
+                            className={`p-0.5 rounded ${
+                              isDarkMode ? "text-slate-400 hover:text-red-400" : "text-slate-500 hover:text-red-600"
+                            }`}
                             title="Delete subject"
                           >
                             <Trash2 size={11} />
@@ -699,30 +790,69 @@ export default function StudyVaultApp() {
       {/* ── Main Workspace Area ── */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Top Navbar */}
-        <div className="px-6 py-3.5 border-b border-slate-800 bg-slate-900/90 shrink-0 flex items-center justify-between gap-4 flex-wrap">
+        <div
+          className={`px-6 py-3.5 border-b ${
+            isDarkMode ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-white/95"
+          } shrink-0 flex items-center justify-between gap-4 flex-wrap`}
+        >
           {/* Search bar */}
           <div className="relative flex-1 max-w-md min-w-[200px]">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search
+              size={14}
+              className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${
+                isDarkMode ? "text-slate-500" : "text-slate-400"
+              }`}
+            />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search notes, textbooks, snips…"
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl text-xs bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full pl-9 pr-3 py-1.5 rounded-xl text-xs border ${
+                isDarkMode
+                  ? "bg-slate-800 border-slate-700 text-white placeholder-slate-500"
+                  : "bg-slate-100 border-slate-200 text-slate-900 placeholder-slate-400"
+              } focus:outline-none focus:ring-2 focus:ring-blue-500`}
             />
           </div>
 
           {/* Action buttons and view controls */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Dark Mode toggle in top bar */}
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              className={`p-1.5 rounded-xl border transition ${
+                isDarkMode
+                  ? "bg-slate-800 border-slate-700 text-amber-400 hover:text-amber-300"
+                  : "bg-white border-slate-200 text-slate-600 hover:text-slate-900 shadow-sm"
+              }`}
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkMode ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+
             {activeView === "notes" && (
               <>
                 {/* View Mode Toggle */}
-                <div className="flex items-center p-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-400">
+                <div
+                  className={`flex items-center p-1 rounded-xl border ${
+                    isDarkMode
+                      ? "bg-slate-800 border-slate-700 text-slate-400"
+                      : "bg-slate-100 border-slate-200 text-slate-500"
+                  }`}
+                >
                   <button
                     type="button"
                     onClick={() => setViewMode("compact")}
                     className={`p-1 rounded-lg transition ${
-                      viewMode === "compact" ? "bg-slate-700 text-white" : "hover:text-white"
+                      viewMode === "compact"
+                        ? isDarkMode
+                          ? "bg-slate-700 text-white"
+                          : "bg-white text-slate-900 shadow-sm"
+                        : isDarkMode
+                        ? "hover:text-white"
+                        : "hover:text-slate-900"
                     }`}
                     title="Compact view"
                   >
@@ -732,7 +862,13 @@ export default function StudyVaultApp() {
                     type="button"
                     onClick={() => setViewMode("medium")}
                     className={`p-1 rounded-lg transition ${
-                      viewMode === "medium" ? "bg-slate-700 text-white" : "hover:text-white"
+                      viewMode === "medium"
+                        ? isDarkMode
+                          ? "bg-slate-700 text-white"
+                          : "bg-white text-slate-900 shadow-sm"
+                        : isDarkMode
+                        ? "hover:text-white"
+                        : "hover:text-slate-900"
                     }`}
                     title="Grid view"
                   >
@@ -742,7 +878,13 @@ export default function StudyVaultApp() {
                     type="button"
                     onClick={() => setViewMode("expanded")}
                     className={`p-1 rounded-lg transition ${
-                      viewMode === "expanded" ? "bg-slate-700 text-white" : "hover:text-white"
+                      viewMode === "expanded"
+                        ? isDarkMode
+                          ? "bg-slate-700 text-white"
+                          : "bg-white text-slate-900 shadow-sm"
+                        : isDarkMode
+                        ? "hover:text-white"
+                        : "hover:text-slate-900"
                     }`}
                     title="Expanded view"
                   >
@@ -784,13 +926,23 @@ export default function StudyVaultApp() {
                     setLocalModalTab("scan");
                     setShowLocalModal(true);
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition"
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 border rounded-xl text-xs font-semibold transition ${
+                    isDarkMode
+                      ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                      : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm"
+                  }`}
                 >
                   <FolderSearch size={13} />
                   <span>Scan Folder</span>
                 </button>
 
-                <label className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold cursor-pointer transition">
+                <label
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 border rounded-xl text-xs font-semibold cursor-pointer transition ${
+                    isDarkMode
+                      ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                      : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm"
+                  }`}
+                >
                   {uploadingCloud ? (
                     <Loader2 size={13} className="animate-spin" />
                   ) : (
@@ -814,7 +966,11 @@ export default function StudyVaultApp() {
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="py-24 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <div
+              className={`py-24 flex flex-col items-center justify-center gap-3 ${
+                isDarkMode ? "text-slate-400" : "text-slate-500"
+              }`}
+            >
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
               <p className="text-xs font-medium">Loading Study Vault…</p>
             </div>
@@ -834,20 +990,37 @@ export default function StudyVaultApp() {
                 setEditingNote(null);
                 setShowNoteModal(true);
               }}
+              isDarkMode={isDarkMode}
             />
           ) : activeView === "pdfs" ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between text-xs text-slate-400">
+              <div
+                className={`flex items-center justify-between text-xs ${
+                  isDarkMode ? "text-slate-400" : "text-slate-500"
+                }`}
+              >
                 <span>
                   Showing {filteredPdfs.length} document{filteredPdfs.length !== 1 ? "s" : ""}
                 </span>
               </div>
 
               {filteredPdfs.length === 0 ? (
-                <div className="py-20 text-center bg-slate-900/40 rounded-3xl border border-slate-800 p-8 space-y-3">
-                  <BookOpen className="w-12 h-12 text-slate-600 mx-auto" />
-                  <h3 className="text-sm font-bold text-white">No PDF documents found</h3>
-                  <p className="text-xs text-slate-400">
+                <div
+                  className={`py-20 text-center rounded-3xl border p-8 space-y-3 ${
+                    isDarkMode
+                      ? "bg-slate-900/40 border-slate-800"
+                      : "bg-white border-slate-200 shadow-sm"
+                  }`}
+                >
+                  <BookOpen
+                    className={`w-12 h-12 mx-auto ${
+                      isDarkMode ? "text-slate-600" : "text-slate-400"
+                    }`}
+                  />
+                  <h3 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                    No PDF documents found
+                  </h3>
+                  <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                     Link a local file path on your computer for instant streaming, or upload a PDF.
                   </p>
                 </div>
@@ -860,15 +1033,23 @@ export default function StudyVaultApp() {
                     return (
                       <div
                         key={pdf.id}
-                        className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between group shadow-sm"
+                        className={`p-4 rounded-2xl border transition flex flex-col justify-between group shadow-sm ${
+                          isDarkMode
+                            ? "bg-slate-900 border-slate-800 hover:border-slate-700"
+                            : "bg-white border-slate-200 hover:border-slate-300"
+                        }`}
                       >
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                                 isLocal
-                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                  : "bg-sky-500/10 text-sky-400 border border-sky-500/20"
+                                  ? isDarkMode
+                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                    : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : isDarkMode
+                                  ? "bg-sky-500/10 text-sky-400 border border-sky-500/20"
+                                  : "bg-sky-50 text-sky-700 border border-sky-200"
                               }`}
                             >
                               {isLocal ? <HardDrive size={10} /> : <Cloud size={10} />}
@@ -883,7 +1064,11 @@ export default function StudyVaultApp() {
                                   setEditPdfName(pdf.originalName);
                                   setEditPdfLocalPath(pdf.localPath || "");
                                 }}
-                                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                                className={`p-1 rounded transition ${
+                                  isDarkMode
+                                    ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                                    : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                                }`}
                                 title="Edit details"
                               >
                                 <Edit3 size={13} />
@@ -891,7 +1076,11 @@ export default function StudyVaultApp() {
                               <button
                                 type="button"
                                 onClick={() => handleDeletePdf(pdf.id, pdf.originalName)}
-                                className="p-1 text-slate-400 hover:text-red-400 rounded hover:bg-slate-800"
+                                className={`p-1 rounded transition ${
+                                  isDarkMode
+                                    ? "text-slate-400 hover:text-red-400 hover:bg-slate-800"
+                                    : "text-slate-400 hover:text-red-600 hover:bg-slate-100"
+                                }`}
                                 title="Delete document"
                               >
                                 <Trash2 size={13} />
@@ -900,23 +1089,39 @@ export default function StudyVaultApp() {
                           </div>
 
                           <h3
-                            className="font-bold text-sm text-white line-clamp-2"
+                            className={`font-bold text-sm line-clamp-2 ${
+                              isDarkMode ? "text-white" : "text-slate-900"
+                            }`}
                             title={pdf.originalName}
                           >
                             {pdf.originalName}
                           </h3>
 
                           {isLocal && pdf.localPath && (
-                            <p className="text-[11px] font-mono text-slate-400 truncate bg-slate-950/60 p-1.5 rounded-lg border border-slate-800">
+                            <p
+                              className={`text-[11px] font-mono truncate p-1.5 rounded-lg border ${
+                                isDarkMode
+                                  ? "bg-slate-950/60 text-slate-400 border-slate-800"
+                                  : "bg-slate-50 text-slate-600 border-slate-200"
+                              }`}
+                            >
                               {pdf.localPath}
                             </p>
                           )}
                         </div>
 
-                        <div className="pt-4 border-t border-slate-800/80 mt-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <div
+                          className={`pt-4 border-t mt-3 flex items-center justify-between ${
+                            isDarkMode ? "border-slate-800/80" : "border-slate-100"
+                          }`}
+                        >
+                          <div
+                            className={`flex items-center gap-2 text-xs ${
+                              isDarkMode ? "text-slate-400" : "text-slate-500"
+                            }`}
+                          >
                             <span className="flex items-center gap-1">
-                              <Bookmark size={12} className="text-amber-400" />
+                              <Bookmark size={12} className="text-amber-500" />
                               <span>{snipCount}</span>
                             </span>
                             <span>·</span>
@@ -940,10 +1145,22 @@ export default function StudyVaultApp() {
           ) : activeView === "sessions" ? (
             <div className="space-y-4">
               {sessions.length === 0 ? (
-                <div className="py-20 text-center bg-slate-900/40 rounded-3xl border border-slate-800 p-8 space-y-2">
-                  <Layers className="w-12 h-12 text-slate-600 mx-auto" />
-                  <h3 className="text-sm font-bold text-white">No study sessions recorded yet</h3>
-                  <p className="text-xs text-slate-400">
+                <div
+                  className={`py-20 text-center rounded-3xl border p-8 space-y-2 ${
+                    isDarkMode
+                      ? "bg-slate-900/40 border-slate-800"
+                      : "bg-white border-slate-200 shadow-sm"
+                  }`}
+                >
+                  <Layers
+                    className={`w-12 h-12 mx-auto ${
+                      isDarkMode ? "text-slate-600" : "text-slate-400"
+                    }`}
+                  />
+                  <h3 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                    No study sessions recorded yet
+                  </h3>
+                  <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                     Open documents in Study Mode to capture snips and record study sessions.
                   </p>
                 </div>
@@ -952,30 +1169,50 @@ export default function StudyVaultApp() {
                   {sessions.map((sess) => (
                     <div
                       key={sess.id}
-                      className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition flex flex-col justify-between"
+                      className={`p-4 rounded-2xl border transition flex flex-col justify-between ${
+                        isDarkMode
+                          ? "bg-slate-900 border-slate-800 hover:border-slate-700"
+                          : "bg-white border-slate-200 hover:border-slate-300 shadow-sm"
+                      }`}
                     >
                       <div>
-                        <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                        <div
+                          className={`flex items-center justify-between text-xs mb-1 ${
+                            isDarkMode ? "text-slate-400" : "text-slate-500"
+                          }`}
+                        >
                           <span className="flex items-center gap-1">
                             <Calendar size={12} />
                             <span>{new Date(sess.startedAt).toLocaleDateString()}</span>
                           </span>
                         </div>
 
-                        <h3 className="font-bold text-sm text-white line-clamp-1 mb-2">
+                        <h3
+                          className={`font-bold text-sm line-clamp-1 mb-2 ${
+                            isDarkMode ? "text-white" : "text-slate-900"
+                          }`}
+                        >
                           {sess.title}
                         </h3>
 
-                        <p className="text-xs text-slate-400">
+                        <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                           {sess.snips?.length || 0} snip{sess.snips?.length !== 1 ? "s" : ""} saved
                         </p>
                       </div>
 
-                      <div className="pt-3 border-t border-slate-800 mt-3 flex items-center justify-between">
+                      <div
+                        className={`pt-3 border-t mt-3 flex items-center justify-between ${
+                          isDarkMode ? "border-slate-800" : "border-slate-100"
+                        }`}
+                      >
                         <button
                           type="button"
                           onClick={() => exportStudySnipsPdf(sess.title, sess.snips || [])}
-                          className="flex items-center gap-1 text-xs text-slate-300 hover:text-white"
+                          className={`flex items-center gap-1 text-xs transition ${
+                            isDarkMode
+                              ? "text-slate-300 hover:text-white"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
                         >
                           <FileDown size={13} />
                           <span>Export PDF</span>
@@ -984,7 +1221,11 @@ export default function StudyVaultApp() {
                         <button
                           type="button"
                           onClick={() => setViewingSession(sess)}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition"
+                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                            isDarkMode
+                              ? "bg-slate-800 hover:bg-slate-700 text-white"
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-800"
+                          }`}
                         >
                           View Snips
                         </button>
@@ -1001,6 +1242,7 @@ export default function StudyVaultApp() {
               pdfs={pdfs}
               sessions={sessions}
               studyTimes={studyTimes}
+              isDarkMode={isDarkMode}
             />
           )}
         </div>
@@ -1017,6 +1259,7 @@ export default function StudyVaultApp() {
           existingNote={editingNote}
           defaultProjectId={activeProject !== "all" ? activeProject.id : null}
           allProjects={projects}
+          isDarkMode={isDarkMode}
         />
       )}
 
@@ -1029,37 +1272,50 @@ export default function StudyVaultApp() {
           }}
           onProjectSaved={fetchAll}
           existingProject={editingProject}
+          isDarkMode={isDarkMode}
         />
       )}
 
       {/* Link Local PDF & Folder Scanner Modal */}
       {showLocalModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div
+            className={`border rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 ${
+              isDarkMode ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+            }`}
+          >
+            <div className={`flex items-center justify-between border-b pb-3 ${isDarkMode ? "border-slate-800" : "border-slate-100"}`}>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
+                <div className={`p-1.5 rounded-lg ${isDarkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-50 text-blue-600"}`}>
                   <HardDrive size={18} />
                 </div>
-                <h3 className="text-sm font-bold text-white">Add Local PDF Documents</h3>
+                <h3 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                  Add Local PDF Documents
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowLocalModal(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                className={`p-1.5 rounded-lg transition ${
+                  isDarkMode
+                    ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                    : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                }`}
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-950 border border-slate-800">
+            <div className={`flex items-center gap-1 p-1 rounded-xl border ${isDarkMode ? "bg-slate-950 border-slate-800" : "bg-slate-100 border-slate-200"}`}>
               <button
                 type="button"
                 onClick={() => setLocalModalTab("path")}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
                   localModalTab === "path"
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : isDarkMode
+                    ? "text-slate-400 hover:text-slate-200"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
               >
                 Single PDF File Path
@@ -1069,8 +1325,10 @@ export default function StudyVaultApp() {
                 onClick={() => setLocalModalTab("scan")}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
                   localModalTab === "scan"
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : isDarkMode
+                    ? "text-slate-400 hover:text-slate-200"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
               >
                 Folder Scanner
@@ -1080,7 +1338,7 @@ export default function StudyVaultApp() {
             {localModalTab === "path" && (
               <form onSubmit={handleLinkLocalPdf} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                     Local PDF File Path:
                   </label>
                   <div className="relative">
@@ -1093,7 +1351,11 @@ export default function StudyVaultApp() {
                         validateLocalPath(e.target.value);
                       }}
                       placeholder="e.g. C:\Users\name\Documents\Textbook.pdf"
-                      className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-700 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={`w-full px-3 py-2 text-xs font-mono rounded-xl border ${
+                        isDarkMode
+                          ? "border-slate-700 bg-slate-800 text-white placeholder-slate-500"
+                          : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     />
                     {validatingLocal && (
                       <Loader2
@@ -1108,14 +1370,18 @@ export default function StudyVaultApp() {
                   <div
                     className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
                       localValidation.valid
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
-                        : "bg-red-500/10 border-red-500/20 text-red-300"
+                        ? isDarkMode
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                          : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                        : isDarkMode
+                        ? "bg-red-500/10 border-red-500/20 text-red-300"
+                        : "bg-red-50 border-red-200 text-red-700"
                     }`}
                   >
                     {localValidation.valid ? (
-                      <Check size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                      <Check size={16} className="text-emerald-500 shrink-0 mt-0.5" />
                     ) : (
-                      <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                      <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
                     )}
                     <div>
                       <p className="font-semibold">
@@ -1131,7 +1397,7 @@ export default function StudyVaultApp() {
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                     Display Title (Optional):
                   </label>
                   <input
@@ -1139,7 +1405,11 @@ export default function StudyVaultApp() {
                     value={localNameInput}
                     onChange={(e) => setLocalNameInput(e.target.value)}
                     placeholder="Leave blank to use filename"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 text-xs rounded-xl border ${
+                      isDarkMode
+                        ? "border-slate-700 bg-slate-800 text-white placeholder-slate-500"
+                        : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   />
                 </div>
 
@@ -1147,7 +1417,11 @@ export default function StudyVaultApp() {
                   <button
                     type="button"
                     onClick={() => setShowLocalModal(false)}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
+                      isDarkMode
+                        ? "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    }`}
                   >
                     Cancel
                   </button>
@@ -1166,7 +1440,7 @@ export default function StudyVaultApp() {
             {localModalTab === "scan" && (
               <div className="space-y-3">
                 <form onSubmit={handleScanDirectory} className="space-y-2">
-                  <label className="block text-xs font-semibold text-slate-300">
+                  <label className={`block text-xs font-semibold ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                     Directory to Scan:
                   </label>
                   <div className="flex gap-2">
@@ -1175,7 +1449,11 @@ export default function StudyVaultApp() {
                       value={scanDirInput}
                       onChange={(e) => setScanDirInput(e.target.value)}
                       placeholder="e.g. C:\Books or E:\StudyPdfs"
-                      className="flex-1 px-3 py-2 text-xs font-mono rounded-xl border border-slate-700 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className={`flex-1 px-3 py-2 text-xs font-mono rounded-xl border ${
+                        isDarkMode
+                          ? "border-slate-700 bg-slate-800 text-white placeholder-slate-500"
+                          : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                     />
                     <button
                       type="submit"
@@ -1189,16 +1467,16 @@ export default function StudyVaultApp() {
                 </form>
 
                 {scannedResults && (
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <div className={`space-y-2 pt-2 border-t ${isDarkMode ? "border-slate-800" : "border-slate-100"}`}>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400 font-medium">
+                      <span className={`font-medium ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
                         Found {scannedResults.totalFound} PDFs in directory
                       </span>
                       {scannedResults.files.some((f) => !f.isImported) && (
                         <button
                           type="button"
                           onClick={handleImportAllScanned}
-                          className="text-blue-400 hover:text-blue-300 font-semibold"
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-semibold"
                         >
                           Import All
                         </button>
@@ -1209,11 +1487,19 @@ export default function StudyVaultApp() {
                       {scannedResults.files.map((file, idx) => (
                         <div
                           key={idx}
-                          className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-3 text-xs"
+                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                            isDarkMode
+                              ? "bg-slate-800/80 border-slate-700/80"
+                              : "bg-slate-50 border-slate-200"
+                          }`}
                         >
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-200 truncate">{file.name}</p>
-                            <p className="text-[10px] font-mono text-slate-400 truncate">{file.path}</p>
+                            <p className={`font-semibold truncate ${isDarkMode ? "text-slate-200" : "text-slate-800"}`}>
+                              {file.name}
+                            </p>
+                            <p className={`text-[10px] font-mono truncate ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                              {file.path}
+                            </p>
                           </div>
                           <button
                             type="button"
@@ -1221,7 +1507,9 @@ export default function StudyVaultApp() {
                             disabled={file.isImported || scanImporting[file.path]}
                             className={`px-3 py-1 rounded-lg text-xs font-semibold transition shrink-0 ${
                               file.isImported
-                                ? "bg-slate-700 text-slate-400 cursor-default"
+                                ? isDarkMode
+                                  ? "bg-slate-700 text-slate-400 cursor-default"
+                                  : "bg-slate-200 text-slate-500 cursor-default"
                                 : "bg-blue-600 hover:bg-blue-700 text-white"
                             }`}
                           >
@@ -1250,13 +1538,19 @@ export default function StudyVaultApp() {
       {/* Edit PDF Details Modal */}
       {editingPdf && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white">Edit Document Details</h3>
+          <div
+            className={`border rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 ${
+              isDarkMode ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+            }`}
+          >
+            <div className={`flex items-center justify-between border-b pb-3 ${isDarkMode ? "border-slate-800" : "border-slate-100"}`}>
+              <h3 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                Edit Document Details
+              </h3>
               <button
                 type="button"
                 onClick={() => setEditingPdf(null)}
-                className="p-1 text-slate-400 hover:text-white rounded"
+                className={`p-1 rounded ${isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-400 hover:text-slate-700"}`}
               >
                 <X size={16} />
               </button>
@@ -1264,20 +1558,24 @@ export default function StudyVaultApp() {
 
             <form onSubmit={handleSaveEditPdf} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                   Document Name:
                 </label>
                 <input
                   type="text"
                   value={editPdfName}
                   onChange={(e) => setEditPdfName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full px-3 py-2 text-xs rounded-xl border ${
+                    isDarkMode
+                      ? "border-slate-700 bg-slate-800 text-white"
+                      : "border-slate-300 bg-white text-slate-900"
+                  } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                 />
               </div>
 
               {editingPdf.storageType === "local" && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
                     Local File Path:
                   </label>
                   <input
@@ -1285,7 +1583,11 @@ export default function StudyVaultApp() {
                     value={editPdfLocalPath}
                     onChange={(e) => setEditPdfLocalPath(e.target.value)}
                     placeholder="e.g. C:\Docs\Book.pdf"
-                    className="w-full px-3 py-2 text-xs font-mono rounded-xl border border-slate-700 bg-slate-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 text-xs font-mono rounded-xl border ${
+                      isDarkMode
+                        ? "border-slate-700 bg-slate-800 text-white"
+                        : "border-slate-300 bg-white text-slate-900"
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   />
                 </div>
               )}
@@ -1294,7 +1596,11 @@ export default function StudyVaultApp() {
                 <button
                   type="button"
                   onClick={() => setEditingPdf(null)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-xl text-xs font-semibold"
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
+                    isDarkMode
+                      ? "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
                 >
                   Cancel
                 </button>
@@ -1312,19 +1618,33 @@ export default function StudyVaultApp() {
 
       {/* View Session Snips Modal */}
       {viewingSession && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100 animate-fadeIn">
-          <div className="flex items-center justify-between px-6 py-3.5 border-b border-slate-800 bg-slate-900 shrink-0">
+        <div
+          className={`fixed inset-0 z-50 flex flex-col animate-fadeIn ${
+            isDarkMode ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
+          }`}
+        >
+          <div
+            className={`flex items-center justify-between px-6 py-3.5 border-b shrink-0 ${
+              isDarkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+            }`}
+          >
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setViewingSession(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                className={`p-1.5 rounded-lg transition ${
+                  isDarkMode
+                    ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                }`}
               >
                 <ArrowLeft size={18} />
               </button>
               <div>
-                <h2 className="text-sm font-bold text-white">{viewingSession.title}</h2>
-                <p className="text-xs text-slate-400">
+                <h2 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                  {viewingSession.title}
+                </h2>
+                <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
                   {viewingSession.snips?.length || 0} snips saved · Created{" "}
                   {new Date(viewingSession.startedAt).toLocaleDateString()}
                 </p>
@@ -1337,7 +1657,11 @@ export default function StudyVaultApp() {
                 onClick={() =>
                   exportStudySnipsPdf(viewingSession.title, viewingSession.snips || [])
                 }
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
+                  isDarkMode
+                    ? "bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                }`}
               >
                 <FileDown size={13} />
                 <span>Export PDF</span>
@@ -1345,7 +1669,11 @@ export default function StudyVaultApp() {
               <button
                 type="button"
                 onClick={() => setViewingSession(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                className={`p-1.5 rounded-lg transition ${
+                  isDarkMode
+                    ? "text-slate-400 hover:text-white hover:bg-slate-800"
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+                }`}
               >
                 <X size={18} />
               </button>
@@ -1378,7 +1706,7 @@ export default function StudyVaultApp() {
               onDownload={() =>
                 exportStudySnipsPdf(viewingSession.title, viewingSession.snips || [])
               }
-              isDarkMode={true}
+              isDarkMode={isDarkMode}
             />
           </div>
         </div>

@@ -18,6 +18,8 @@ import {
   FileText,
   Loader2,
   Trash2,
+  Sun,
+  Moon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useTabManager } from "../../utils/useTabManager";
@@ -36,6 +38,24 @@ export default function StudyReaderPage() {
   const params = useParams();
   const router = useRouter();
   const pdfId = params?.id as string;
+
+  // Theme state: defaults to false (Light Mode) matching original study-vault-v10
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("studyVaultDarkMode");
+    if (saved !== null) {
+      setIsDarkMode(saved === "true");
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("studyVaultDarkMode", String(next));
+      return next;
+    });
+  };
 
   const { tabs, activeTab, addTab, closeTab, patchTab, setActiveTab } = useTabManager();
   const [snipModal, setSnipModal] = useState<{
@@ -395,12 +415,24 @@ export default function StudyReaderPage() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-950 text-gray-100 overflow-hidden select-none">
+    <div
+      className={`fixed inset-0 z-50 w-screen h-screen flex flex-col overflow-hidden select-none ${
+        isDarkMode ? "bg-slate-950 text-gray-100" : "bg-slate-100 text-slate-900"
+      }`}
+    >
       {/* Tab Bar Header */}
-      <div className="flex items-center px-2 pt-1.5 bg-slate-900 border-b border-slate-800 shrink-0 gap-1 overflow-x-auto">
+      <div
+        className={`flex items-center px-2 pt-1.5 border-b shrink-0 gap-1 overflow-x-auto ${
+          isDarkMode ? "bg-slate-900 border-slate-800" : "bg-slate-200 border-slate-300"
+        }`}
+      >
         <Link
           href="/tools/study-vault"
-          className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-slate-800 transition mr-1 shrink-0"
+          className={`p-1.5 rounded-lg transition mr-1 shrink-0 ${
+            isDarkMode
+              ? "text-gray-400 hover:text-white hover:bg-slate-800"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-300/60"
+          }`}
           title="Back to Study Library"
         >
           <ArrowLeft size={16} />
@@ -414,11 +446,15 @@ export default function StudyReaderPage() {
               onClick={() => setActiveTab(idx)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-t-xl text-xs cursor-pointer border-t border-x transition font-medium max-w-[200px] shrink-0 ${
                 isActive
-                  ? "bg-slate-950 border-slate-700 text-blue-400 shadow-sm"
-                  : "bg-slate-900/60 border-transparent text-gray-400 hover:bg-slate-800 hover:text-gray-200"
+                  ? isDarkMode
+                    ? "bg-slate-950 border-slate-700 text-blue-400 shadow-sm"
+                    : "bg-white border-slate-300 text-blue-600 shadow-sm"
+                  : isDarkMode
+                  ? "bg-slate-900/60 border-transparent text-gray-400 hover:bg-slate-800 hover:text-gray-200"
+                  : "bg-slate-200/60 border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
-              <FileText size={13} className={isActive ? "text-blue-400" : "text-gray-500"} />
+              <FileText size={13} className={isActive ? "text-blue-500" : isDarkMode ? "text-gray-500" : "text-slate-400"} />
               <span className="truncate flex-1">{tab.pdfEntry.originalName}</span>
               {tabs.length > 1 && (
                 <button
@@ -427,7 +463,9 @@ export default function StudyReaderPage() {
                     e.stopPropagation();
                     closeTab(idx);
                   }}
-                  className="p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-white"
+                  className={`p-0.5 rounded transition ${
+                    isDarkMode ? "hover:bg-white/10 text-gray-400 hover:text-white" : "hover:bg-black/5 text-slate-400 hover:text-slate-700"
+                  }`}
                 >
                   <X size={12} />
                 </button>
@@ -439,11 +477,31 @@ export default function StudyReaderPage() {
         <button
           type="button"
           onClick={openNewTabModal}
-          className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-slate-800 transition shrink-0 ml-1"
+          className={`p-1.5 rounded-lg transition shrink-0 ml-1 ${
+            isDarkMode
+              ? "text-gray-400 hover:text-white hover:bg-slate-800"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-300/60"
+          }`}
           title="Open another PDF tab"
         >
           <Plus size={15} />
         </button>
+
+        {/* Sun / Moon Theme Toggle */}
+        <div className="ml-auto flex items-center gap-1 shrink-0 px-1">
+          <button
+            type="button"
+            onClick={toggleDarkMode}
+            className={`p-1.5 rounded-lg transition ${
+              isDarkMode
+                ? "text-amber-400 hover:text-amber-300 hover:bg-slate-800"
+                : "text-slate-600 hover:text-slate-900 hover:bg-slate-300/60"
+            }`}
+            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {isDarkMode ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -464,7 +522,7 @@ export default function StudyReaderPage() {
         onZoomOut={() => patchTab(activeTab, { scale: Math.max(0.4, currentTab.scale - 0.15) })}
         onZoomReset={() => patchTab(activeTab, { scale: 1.3 })}
         onZoomSet={(s) => patchTab(activeTab, { scale: s })}
-        isDarkMode={true}
+        isDarkMode={isDarkMode}
         snipCount={currentTab.pdfEntry.studyData?.snips?.length || 0}
         onToggleNASPanel={() => patchTab(activeTab, { nasPanelOpen: !currentTab.nasPanelOpen })}
         nasPanelOpen={currentTab.nasPanelOpen}
@@ -488,13 +546,25 @@ export default function StudyReaderPage() {
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Sidebar (Outline) */}
         {sidebarOpen && (
-          <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-            <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-200">Outline & Bookmarks</span>
+          <div
+            className={`w-64 border-r flex flex-col shrink-0 ${
+              isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+            }`}
+          >
+            <div
+              className={`p-3 border-b flex items-center justify-between ${
+                isDarkMode ? "border-slate-800" : "border-slate-100"
+              }`}
+            >
+              <span className={`text-xs font-bold ${isDarkMode ? "text-gray-200" : "text-slate-800"}`}>
+                Outline & Bookmarks
+              </span>
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
-                className="p-1 text-gray-400 hover:text-white rounded"
+                className={`p-1 rounded ${
+                  isDarkMode ? "text-gray-400 hover:text-white" : "text-slate-400 hover:text-slate-700"
+                }`}
               >
                 <X size={14} />
               </button>
@@ -510,13 +580,17 @@ export default function StudyReaderPage() {
                         rendererRef.current?.scrollToPage(item.pageNumber || 1);
                       }
                     }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-slate-800 text-gray-300 transition truncate"
+                    className={`w-full text-left p-2 rounded-lg transition truncate ${
+                      isDarkMode ? "hover:bg-slate-800 text-gray-300" : "hover:bg-slate-100 text-slate-700"
+                    }`}
                   >
                     {item.title}
                   </button>
                 ))
               ) : (
-                <p className="p-4 text-center text-gray-500 text-xs">No outline available in this document</p>
+                <p className={`p-4 text-center text-xs ${isDarkMode ? "text-gray-500" : "text-slate-400"}`}>
+                  No outline available in this document
+                </p>
               )}
             </div>
           </div>
@@ -547,13 +621,17 @@ export default function StudyReaderPage() {
               setDocOutlines((prev) => ({ ...prev, [currentTab.pdfEntry.id]: outline }));
             }}
             onHistoryChange={setHistoryState}
-            isDarkMode={true}
+            isDarkMode={isDarkMode}
           />
         </div>
 
         {/* Right Snips & Notes Panel */}
         {currentTab.nasPanelOpen && (
-          <div className="w-80 border-l border-slate-800 bg-slate-900 shrink-0 h-full">
+          <div
+            className={`w-80 border-l shrink-0 h-full ${
+              isDarkMode ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+            }`}
+          >
             <NASPanel
               session={{
                 id: currentSession?.id,
@@ -572,7 +650,7 @@ export default function StudyReaderPage() {
                 )
               }
               onJumpToPage={(p) => rendererRef.current?.scrollToPage(p)}
-              isDarkMode={true}
+              isDarkMode={isDarkMode}
             />
           </div>
         )}
@@ -581,24 +659,36 @@ export default function StudyReaderPage() {
       {/* Snip Save Modal */}
       {snipModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <div
+            className={`border rounded-2xl max-w-lg w-full p-5 shadow-2xl space-y-4 ${
+              isDarkMode ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+            }`}
+          >
+            <div className={`flex items-center justify-between border-b pb-3 ${isDarkMode ? "border-slate-800" : "border-slate-100"}`}>
+              <h3 className={`text-sm font-bold flex items-center gap-2 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
                 <span>✂️ New Snip Captured</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    isDarkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-50 text-blue-600"
+                  }`}
+                >
                   Page {snipModal.page}
                 </span>
               </h3>
               <button
                 type="button"
                 onClick={() => setSnipModal(null)}
-                className="p-1 text-gray-400 hover:text-white rounded"
+                className={`p-1 rounded ${isDarkMode ? "text-gray-400 hover:text-white" : "text-slate-400 hover:text-slate-700"}`}
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="max-h-60 overflow-hidden rounded-xl border border-slate-800 bg-slate-950 flex items-center justify-center">
+            <div
+              className={`max-h-60 overflow-hidden rounded-xl border flex items-center justify-center ${
+                isDarkMode ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-slate-100"
+              }`}
+            >
               <img
                 src={snipModal.imageData}
                 alt="Snip preview"
@@ -607,7 +697,7 @@ export default function StudyReaderPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-300 mb-1">
+              <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-gray-300" : "text-slate-700"}`}>
                 Note / Key Findings:
               </label>
               <textarea
@@ -616,7 +706,11 @@ export default function StudyReaderPage() {
                 value={snipNote}
                 onChange={(e) => setSnipNote(e.target.value)}
                 placeholder="Add notes for this snippet… (optional)"
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-700 bg-slate-800 text-white resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className={`w-full text-xs p-2.5 rounded-xl border resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                  isDarkMode
+                    ? "border-slate-700 bg-slate-800 text-white placeholder-slate-500"
+                    : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"
+                }`}
               />
             </div>
 
@@ -624,16 +718,24 @@ export default function StudyReaderPage() {
               <button
                 type="button"
                 onClick={copySnipImage}
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-gray-200 rounded-xl text-xs font-semibold transition"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition border ${
+                  isDarkMode
+                    ? "bg-slate-800 hover:bg-slate-700 text-gray-200 border-slate-700"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                }`}
               >
-                {snipCopied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                {snipCopied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
                 <span>{snipCopied ? "Copied" : "Copy Image"}</span>
               </button>
               <div className="flex-1" />
               <button
                 type="button"
                 onClick={() => setSnipModal(null)}
-                className="px-4 py-2 bg-slate-800 text-gray-300 hover:bg-slate-700 rounded-xl text-xs font-semibold transition"
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
+                  isDarkMode
+                    ? "bg-slate-800 text-gray-300 hover:bg-slate-700"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
               >
                 Cancel
               </button>
@@ -652,13 +754,17 @@ export default function StudyReaderPage() {
       {/* PDF Picker Modal for Opening Additional Tabs */}
       {showPdfPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-white">Open Document Tab</h3>
+          <div
+            className={`border rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4 ${
+              isDarkMode ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+            }`}
+          >
+            <div className={`flex items-center justify-between border-b pb-3 ${isDarkMode ? "border-slate-800" : "border-slate-100"}`}>
+              <h3 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>Open Document Tab</h3>
               <button
                 type="button"
                 onClick={() => setShowPdfPicker(false)}
-                className="p-1 text-gray-400 hover:text-white rounded"
+                className={`p-1 rounded ${isDarkMode ? "text-gray-400 hover:text-white" : "text-slate-400 hover:text-slate-700"}`}
               >
                 <X size={16} />
               </button>
@@ -666,8 +772,8 @@ export default function StudyReaderPage() {
 
             {/* Quick Link Local Path */}
             <form onSubmit={handleLinkLocalPdfInPicker} className="space-y-2">
-              <label className="block text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                <HardDrive size={13} className="text-blue-400" />
+              <label className={`block text-xs font-semibold flex items-center gap-1.5 ${isDarkMode ? "text-gray-300" : "text-slate-700"}`}>
+                <HardDrive size={13} className="text-blue-500" />
                 <span>Link Local PDF Path:</span>
               </label>
               <div className="flex gap-2">
@@ -676,7 +782,11 @@ export default function StudyReaderPage() {
                   value={pickerLocalPath}
                   onChange={(e) => setPickerLocalPath(e.target.value)}
                   placeholder="e.g. C:\Books\Calculus.pdf"
-                  className="flex-1 px-3 py-1.5 text-xs font-mono rounded-xl border border-slate-700 bg-slate-800 text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className={`flex-1 px-3 py-1.5 text-xs font-mono rounded-xl border ${
+                    isDarkMode
+                      ? "border-slate-700 bg-slate-800 text-white placeholder-slate-500"
+                      : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"
+                  } focus:outline-none focus:ring-1 focus:ring-blue-500`}
                 />
                 <button
                   type="submit"
@@ -688,8 +798,10 @@ export default function StudyReaderPage() {
               </div>
             </form>
 
-            <div className="border-t border-slate-800 pt-3">
-              <p className="text-xs font-semibold text-gray-400 mb-2">Or select from Library:</p>
+            <div className={`border-t pt-3 ${isDarkMode ? "border-slate-800" : "border-slate-100"}`}>
+              <p className={`text-xs font-semibold mb-2 ${isDarkMode ? "text-gray-400" : "text-slate-500"}`}>
+                Or select from Library:
+              </p>
               <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
                 {availablePdfs.map((pdf) => (
                   <button
@@ -699,10 +811,14 @@ export default function StudyReaderPage() {
                       setShowPdfPicker(false);
                       addTab({ pdfEntry: pdf, rotation: 0 });
                     }}
-                    className="w-full text-left px-3 py-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 text-xs font-medium text-gray-200 flex items-center justify-between transition"
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between transition ${
+                      isDarkMode
+                        ? "bg-slate-800/60 hover:bg-slate-800 text-gray-200"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-800"
+                    }`}
                   >
                     <span className="truncate">{pdf.originalName}</span>
-                    <span className="text-[10px] text-gray-500 font-mono ml-2 shrink-0">
+                    <span className={`text-[10px] font-mono ml-2 shrink-0 ${isDarkMode ? "text-gray-500" : "text-slate-400"}`}>
                       {pdf.storageType === "local" ? "Local" : "Cloud"}
                     </span>
                   </button>

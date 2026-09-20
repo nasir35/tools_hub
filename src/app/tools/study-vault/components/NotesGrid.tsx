@@ -14,6 +14,7 @@ interface NotesGridProps {
   onDeleteNote: (id: string) => void;
   onTogglePin?: (id: string, currentPin: boolean) => void;
   onCreateNote: () => void;
+  isDarkMode?: boolean;
 }
 
 export const NotesGrid: React.FC<NotesGridProps> = ({
@@ -25,7 +26,10 @@ export const NotesGrid: React.FC<NotesGridProps> = ({
   onDeleteNote,
   onTogglePin,
   onCreateNote,
+  isDarkMode = false,
 }) => {
+  const d = isDarkMode;
+
   const projectMap = React.useMemo(() => {
     const map = new Map<string, ProjectEntry>();
     for (const p of projects) {
@@ -36,12 +40,22 @@ export const NotesGrid: React.FC<NotesGridProps> = ({
 
   if (notes.length === 0) {
     return (
-      <div className="py-20 text-center bg-slate-900/40 rounded-3xl border border-slate-800/80 p-8 space-y-3">
-        <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
+      <div
+        className={`py-20 text-center rounded-3xl border p-8 space-y-3 ${
+          d ? "bg-slate-900/40 border-slate-800/80" : "bg-white border-slate-200 shadow-sm"
+        }`}
+      >
+        <div
+          className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
+            d ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-600"
+          }`}
+        >
           <FileText size={28} />
         </div>
-        <h3 className="text-base font-bold text-white">No notes here yet</h3>
-        <p className="text-xs text-slate-400 max-w-sm mx-auto">
+        <h3 className={`text-base font-bold ${d ? "text-white" : "text-slate-900"}`}>
+          No notes here yet
+        </h3>
+        <p className={`text-xs max-w-sm mx-auto ${d ? "text-slate-400" : "text-slate-600"}`}>
           Capture ideas, class summaries, formulas, and study snippets in this project.
         </p>
         <div className="pt-2">
@@ -90,6 +104,7 @@ export const NotesGrid: React.FC<NotesGridProps> = ({
                 }
               : undefined
           }
+          isDarkMode={isDarkMode}
         />
       ))}
     </div>

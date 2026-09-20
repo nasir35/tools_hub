@@ -19,6 +19,7 @@ interface SummaryPageProps {
   sessions: SessionEntry[];
   studyTimes: StudyTimeEntry[];
   onBack?: () => void;
+  isDarkMode?: boolean;
 }
 
 const fmtDuration = (secs: number) => {
@@ -38,7 +39,9 @@ export const SummaryPage: React.FC<SummaryPageProps> = ({
   sessions,
   studyTimes,
   onBack,
+  isDarkMode = false,
 }) => {
+  const d = isDarkMode;
   const [timeFilter, setTimeFilter] = useState<"today" | "week" | "month" | "all">("today");
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -48,14 +51,14 @@ export const SummaryPage: React.FC<SummaryPageProps> = ({
       return studyTimes.filter((t) => t.date === todayStr);
     }
     if (timeFilter === "week") {
-      const d = new Date();
-      d.setDate(d.getDate() - 7);
-      return studyTimes.filter((t) => new Date(t.date) >= d);
+      const date = new Date();
+      date.setDate(date.getDate() - 7);
+      return studyTimes.filter((t) => new Date(t.date) >= date);
     }
     if (timeFilter === "month") {
-      const d = new Date();
-      d.setMonth(d.getMonth() - 1);
-      return studyTimes.filter((t) => new Date(t.date) >= d);
+      const date = new Date();
+      date.setMonth(date.getMonth() - 1);
+      return studyTimes.filter((t) => new Date(t.date) >= date);
     }
     return studyTimes;
   }, [studyTimes, timeFilter, todayStr]);
@@ -80,28 +83,32 @@ export const SummaryPage: React.FC<SummaryPageProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className={`flex items-center justify-between border-b pb-4 ${d ? "border-slate-800" : "border-slate-200"}`}>
         <div className="flex items-center gap-3">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
-              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-900 transition"
+              className={`p-2 rounded-xl transition ${
+                d ? "text-slate-400 hover:text-white hover:bg-slate-900" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              }`}
               title="Back"
             >
               <ArrowLeft size={18} />
             </button>
           )}
           <div>
-            <h2 className="text-xl font-bold text-white">Study Vault Analytics</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className={`text-xl font-bold ${d ? "text-white" : "text-slate-900"}`}>
+              Study Vault Analytics
+            </h2>
+            <p className={`text-xs ${d ? "text-slate-400" : "text-slate-500"}`}>
               Overview of notes, documents, captured snips, and active study duration
             </p>
           </div>
         </div>
 
         {/* Time period filter */}
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-900 border border-slate-800">
+        <div className={`flex items-center gap-1 p-1 rounded-xl border ${d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
           {(["today", "week", "month", "all"] as const).map((period) => (
             <button
               key={period}
@@ -110,7 +117,7 @@ export const SummaryPage: React.FC<SummaryPageProps> = ({
               className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition ${
                 timeFilter === period
                   ? "bg-blue-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  : d ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900"
               }`}
             >
               {period === "all" ? "All Time" : period}
@@ -121,53 +128,53 @@ export const SummaryPage: React.FC<SummaryPageProps> = ({
 
       {/* Main KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+        <div className={`p-5 rounded-2xl border ${d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-medium">Study Time ({timeFilter})</span>
-            <Clock size={16} className="text-blue-400" />
+            <Clock size={16} className="text-blue-500" />
           </div>
-          <p className="text-2xl font-bold text-white font-mono">
+          <p className={`text-2xl font-bold font-mono ${d ? "text-white" : "text-slate-900"}`}>
             {fmtDuration(totalFilteredSeconds)}
           </p>
         </div>
 
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+        <div className={`p-5 rounded-2xl border ${d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-medium">Total Notes</span>
-            <FileText size={16} className="text-emerald-400" />
+            <FileText size={16} className="text-emerald-500" />
           </div>
-          <p className="text-2xl font-bold text-white">{notes.length}</p>
+          <p className={`text-2xl font-bold ${d ? "text-white" : "text-slate-900"}`}>{notes.length}</p>
         </div>
 
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+        <div className={`p-5 rounded-2xl border ${d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-medium">Study PDFs</span>
-            <BookOpen size={16} className="text-purple-400" />
+            <BookOpen size={16} className="text-purple-500" />
           </div>
-          <p className="text-2xl font-bold text-white">{pdfs.length}</p>
+          <p className={`text-2xl font-bold ${d ? "text-white" : "text-slate-900"}`}>{pdfs.length}</p>
         </div>
 
-        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
+        <div className={`p-5 rounded-2xl border ${d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-medium">Snips Captured</span>
-            <Bookmark size={16} className="text-amber-400" />
+            <Bookmark size={16} className="text-amber-500" />
           </div>
-          <p className="text-2xl font-bold text-white">{totalSnips}</p>
+          <p className={`text-2xl font-bold ${d ? "text-white" : "text-slate-900"}`}>{totalSnips}</p>
         </div>
       </div>
 
       {/* Detailed breakdown: Projects & Study Sessions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Projects / Subjects Distribution */}
-        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Layers size={16} className="text-blue-400" />
+        <div className={`p-5 rounded-3xl border space-y-4 ${d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
+          <h3 className={`text-sm font-bold flex items-center gap-2 ${d ? "text-white" : "text-slate-900"}`}>
+            <Layers size={16} className="text-blue-500" />
             <span>Notes by Subject</span>
           </h3>
 
           <div className="space-y-3">
             {projects.length === 0 ? (
-              <p className="text-xs text-slate-500 py-6 text-center">No projects created yet</p>
+              <p className="text-xs text-slate-400 py-6 text-center">No projects created yet</p>
             ) : (
               projects.map((proj) => {
                 const count = notesByProject[proj.id] || 0;
@@ -176,18 +183,18 @@ export const SummaryPage: React.FC<SummaryPageProps> = ({
                 return (
                   <div key={proj.id} className="space-y-1">
                     <div className="flex items-center justify-between text-xs font-medium">
-                      <span className="flex items-center gap-2 text-slate-200">
+                      <span className={`flex items-center gap-2 ${d ? "text-slate-200" : "text-slate-800"}`}>
                         <span
                           className="w-2.5 h-2.5 rounded-full"
                           style={{ backgroundColor: proj.color }}
                         />
                         <span>{proj.name}</span>
                       </span>
-                      <span className="text-slate-400">
+                      <span className={d ? "text-slate-400" : "text-slate-500"}>
                         {count} notes ({pct}%)
                       </span>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div className={`w-full h-1.5 rounded-full overflow-hidden ${d ? "bg-slate-800" : "bg-slate-100"}`}>
                       <div
                         className="h-full rounded-full transition-all duration-500"
                         style={{
@@ -204,30 +211,34 @@ export const SummaryPage: React.FC<SummaryPageProps> = ({
         </div>
 
         {/* Recent Study Time Logs */}
-        <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Calendar size={16} className="text-emerald-400" />
+        <div className={`p-5 rounded-3xl border space-y-4 ${d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"}`}>
+          <h3 className={`text-sm font-bold flex items-center gap-2 ${d ? "text-white" : "text-slate-900"}`}>
+            <Calendar size={16} className="text-emerald-500" />
             <span>Recent Study Activity</span>
           </h3>
 
           <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
             {filteredStudyTimes.length === 0 ? (
-              <p className="text-xs text-slate-500 py-6 text-center">
+              <p className="text-xs text-slate-400 py-6 text-center">
                 No recorded study activity for this time filter
               </p>
             ) : (
               filteredStudyTimes.slice(0, 10).map((t, idx) => (
                 <div
                   key={idx}
-                  className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between text-xs"
+                  className={`p-3 rounded-2xl border flex items-center justify-between text-xs ${
+                    d ? "bg-slate-950/60 border-slate-800/80" : "bg-slate-50 border-slate-200"
+                  }`}
                 >
                   <div className="min-w-0 pr-2">
-                    <p className="font-semibold text-slate-200 truncate">
+                    <p className={`font-semibold truncate ${d ? "text-slate-200" : "text-slate-800"}`}>
                       {t.pdfName || "Document"}
                     </p>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{t.date}</p>
+                    <p className={`text-[10px] font-mono mt-0.5 ${d ? "text-slate-500" : "text-slate-400"}`}>
+                      {t.date}
+                    </p>
                   </div>
-                  <span className="font-mono text-emerald-400 font-semibold shrink-0">
+                  <span className="font-mono text-emerald-500 font-semibold shrink-0">
                     +{fmtDuration(t.duration)}
                   </span>
                 </div>

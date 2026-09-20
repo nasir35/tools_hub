@@ -7,24 +7,21 @@ import { NoteCard } from "./NoteCard";
 
 interface NotesGridProps {
   notes: NoteEntry[];
-  projects: ProjectEntry[];
-  viewMode?: "compact" | "medium" | "expanded";
+  projects?: ProjectEntry[];
+  viewMode?: "large" | "medium" | "list" | string;
   onSelectNote: (note: NoteEntry) => void;
-  onEditNote: (note: NoteEntry) => void;
-  onDeleteNote: (id: string) => void;
+  onEditNote?: (note: NoteEntry) => void;
+  onDeleteNote?: (id: string) => void;
   onTogglePin?: (id: string, currentPin: boolean) => void;
-  onCreateNote: () => void;
+  onCreateNote?: () => void;
   isDarkMode?: boolean;
 }
 
 export const NotesGrid: React.FC<NotesGridProps> = ({
   notes,
-  projects,
+  projects = [],
   viewMode = "medium",
   onSelectNote,
-  onEditNote,
-  onDeleteNote,
-  onTogglePin,
   onCreateNote,
   isDarkMode = false,
 }) => {
@@ -58,29 +55,46 @@ export const NotesGrid: React.FC<NotesGridProps> = ({
         <p className={`text-xs max-w-sm mx-auto ${d ? "text-slate-400" : "text-slate-600"}`}>
           Capture ideas, class summaries, formulas, and study snippets in this project.
         </p>
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={onCreateNote}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
-          >
-            <Plus size={14} />
-            <span>Create First Note</span>
-          </button>
-        </div>
+        {onCreateNote && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={onCreateNote}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
+            >
+              <Plus size={14} />
+              <span>Create First Note</span>
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
-  const gridClass =
-    viewMode === "compact"
-      ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
-      : viewMode === "expanded"
+  if (viewMode === "list") {
+    return (
+      <div className="flex flex-col gap-2">
+        {notes.map((note) => (
+          <NoteCard
+            key={note.id}
+            note={note}
+            project={note.projectId ? projectMap.get(note.projectId) : null}
+            viewMode="list"
+            onClick={() => onSelectNote(note)}
+            isDarkMode={d}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  const gridCols =
+    viewMode === "large"
       ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
-      : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4";
+      : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4";
 
   return (
-    <div className={gridClass}>
+    <div className={gridCols}>
       {notes.map((note) => (
         <NoteCard
           key={note.id}
@@ -88,23 +102,7 @@ export const NotesGrid: React.FC<NotesGridProps> = ({
           project={note.projectId ? projectMap.get(note.projectId) : null}
           viewMode={viewMode}
           onClick={() => onSelectNote(note)}
-          onEdit={(e) => {
-            e.stopPropagation();
-            onEditNote(note);
-          }}
-          onDelete={(e) => {
-            e.stopPropagation();
-            onDeleteNote(note.id);
-          }}
-          onTogglePin={
-            onTogglePin
-              ? (e) => {
-                  e.stopPropagation();
-                  onTogglePin(note.id, !!note.pinned);
-                }
-              : undefined
-          }
-          isDarkMode={isDarkMode}
+          isDarkMode={d}
         />
       ))}
     </div>

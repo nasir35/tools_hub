@@ -1,24 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import {
-  X,
-  Check,
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  List,
-  ListOrdered,
-  Code,
-  Heading1,
-  Heading2,
-  Paperclip,
-  Loader2,
-  BookOpen,
-} from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import toast from "react-hot-toast";
 import { NoteEntry, ProjectEntry, AttachmentItem } from "../utils/types";
+import { getAttachmentPath, getAttachmentUrl } from "../utils/attachmentPaths";
+import NoteModalToolbar from "./noteModal/NoteModalToolbar";
+import NoteModalEditor from "./noteModal/NoteModalEditor";
+import NoteModalFooter from "./noteModal/NoteModalFooter";
+import {
+  buildAttachmentFolder,
+  collectAttachmentsFromContent,
+} from "./noteModal/noteModalUtils";
+import { ShortcutsModal } from "./ShortcutsModal";
+import { AttachmentPreview } from "./AttachmentPreview";
 
 interface NoteModalProps {
   onClose: () => void;
@@ -27,6 +21,7 @@ interface NoteModalProps {
     content: string;
     projectId?: string | null;
     attachments: AttachmentItem[];
+    attachmentFolder?: string;
   }) => Promise<void>;
   existingNote?: NoteEntry | null;
   defaultProjectId?: string | null;
@@ -47,39 +42,475 @@ export const NoteModal: React.FC<NoteModalProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     existingNote?.projectId || defaultProjectId || null
   );
-  const [attachments, setAttachments] = useState<AttachmentItem[]>(
+  const [noteAttachments, setNoteAttachments] = useState<AttachmentItem[]>(
     existingNote?.attachments || []
   );
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentFolder, setAttachmentFolder] = useState<string>(
+    (existingNote as any)?.attachmentFolder || ""
+  );
+
+  const [isDragging, setIsDragging] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showMathBar, setShowMathBar] = useState(false);
+  const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
+  const [fontSize, setFontSize] = useState("14");
+  const [fontFamily, setFontFamily] = useState("");
+  const [selectedImage, setSelectedImage] = useState<HTMLImageElement | null>(null);
+  const [deleteIconPos, setDeleteIconPos] = useState({ top: 0, left: 0 });
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const editorRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
+  const savedRange = useRef<Range | null>(null);
 
   useEffect(() => {
-    if (editorRef.current && existingNote?.content) {
-      editorRef.current.innerHTML = existingNote.content;
+    if (existingNote) {
+      setTitle(existingNote.title);
+      setSelectedProjectId(existingNote.projectId || defaultProjectId || null);
+      setNoteAttachments(existingNote.attachments || []);
+      setAttachmentFolder((existingNote as any).attachmentFolder || "");
+      if (editorRef.current) {
+        editorRef.current.innerHTML = existingNote.content || "";
+      }
+    } else {
+      setTitle("");
+      setSelectedProjectId(defaultProjectId || null);
+      setNoteAttachments([]);
+      setAttachmentFolder("");
+      if (editorRef.current) {
+        editorRef.current.innerHTML = "";
+      }
     }
-  }, [existingNote]);
+  }, [existingNote, defaultProjectId]);
 
-  const execCmd = (command: string, value: string | undefined = undefined) => {
-    if (typeof document !== "undefined") {
-      document.execCommand(command, false, value);
-      editorRef.current?.focus();
+  const saveSelection = () => {
+    if (typeof window === "undefined") return;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      savedRange.current = sel.getRangeAt(0).cloneRange();
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const restoreSelection = () => {
+    if (typeof window === "undefined") return;
+    const sel = window.getSelection();
+    if (savedRange.current && sel) {
+      sel.removeAllRanges();
+      sel.addRange(savedRange.current);
+    }
+  };
 
-    setUploadingAttachment(true);
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
+  const updateFormats = useCallback(() => {
+    saveSelection();
+    try {
+      if (typeof document === "undefined") return;
+      const sel = window.getSelection();
+      const li =
+        sel?.anchorNode?.nodeType === Node.ELEMENT_NODE
+          ? (sel.anchorNode as HTMLElement).closest("li")
+          : sel?.anchorNode?.parentElement?.closest("li");
+      const currentList = li?.closest("ul, ol");
+      const isUl = currentList?.tagName === "UL";
+      const isOl = currentList?.tagName === "OL";
+
+      setActiveFormats({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        underline: document.queryCommandState("underline"),
+        strikethrough: document.queryCommandState("strikethrough"),
+        ul: isUl || document.queryCommandState("insertUnorderedList"),
+        ol: isOl || document.queryCommandState("insertOrderedList"),
+      });
+    } catch {}
+  }, []);
+
+  // Nested list indentation and outdenting logic
+  const indentListItem = useCallback((li: HTMLElement, sel: Selection) => {
+    const prevLi = li.previousElementSibling as HTMLElement | null;
+    if (!prevLi) return;
+
+    let sublist = Array.from(prevLi.children).find(
+      (c) => c.tagName === "UL" || c.tagName === "OL"
+    ) as HTMLElement | undefined;
+
+    if (!sublist) {
+      const parentList = li.closest("ul, ol");
+      const listTag = parentList ? parentList.tagName.toLowerCase() : "ul";
+      sublist = document.createElement(listTag);
+      prevLi.appendChild(sublist);
+    }
+
+    sublist.appendChild(li);
+
+    const newRange = document.createRange();
+    newRange.selectNodeContents(li);
+    newRange.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+  }, []);
+
+  const convertListItemToBlock = useCallback((li: HTMLElement, sel: Selection) => {
+    const list = li.closest("ul, ol");
+    const newBlock = document.createElement("p");
+
+    if (!li.childNodes.length || (li.childNodes.length === 1 && li.firstChild?.nodeName === "BR")) {
+      newBlock.innerHTML = "<br>";
+    } else {
+      while (li.firstChild) {
+        newBlock.appendChild(li.firstChild);
+      }
+    }
+
+    if (list) {
+      const lisAfter: Element[] = [];
+      let next = li.nextElementSibling;
+      while (next) {
+        lisAfter.push(next);
+        next = next.nextElementSibling;
+      }
+
+      const listParent = list.parentNode;
+      const listNextSibling = list.nextSibling;
+      li.remove();
+
+      if (lisAfter.length > 0) {
+        const continuationList = document.createElement(list.tagName.toLowerCase());
+        lisAfter.forEach((item) => continuationList.appendChild(item));
+        listParent?.insertBefore(newBlock, listNextSibling);
+        listParent?.insertBefore(continuationList, newBlock.nextSibling);
+      } else {
+        if (listNextSibling) {
+          listParent?.insertBefore(newBlock, listNextSibling);
+        } else {
+          listParent?.appendChild(newBlock);
+        }
+      }
+
+      if (!list.children.length) {
+        list.remove();
+      }
+    } else {
+      li.replaceWith(newBlock);
+    }
+
+    const newRange = document.createRange();
+    newRange.setStart(newBlock, 0);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+  }, []);
+
+  const outdentListItem = useCallback(
+    (li: HTMLElement, sel: Selection) => {
+      const currentList = li.closest("ul, ol");
+      if (!currentList) return;
+
+      const parentLi = currentList.parentElement?.closest("li");
+      if (parentLi) {
+        const grandParentList = parentLi.closest("ul, ol");
+        if (grandParentList) {
+          const siblingsAfter: Element[] = [];
+          let next = li.nextElementSibling;
+          while (next) {
+            siblingsAfter.push(next);
+            next = next.nextElementSibling;
+          }
+
+          grandParentList.insertBefore(li, parentLi.nextSibling);
+
+          if (siblingsAfter.length > 0) {
+            const newSublist = document.createElement(currentList.tagName.toLowerCase());
+            siblingsAfter.forEach((s) => newSublist.appendChild(s));
+            li.appendChild(newSublist);
+          }
+
+          if (!currentList.children.length) {
+            currentList.remove();
+          }
+
+          const newRange = document.createRange();
+          newRange.selectNodeContents(li);
+          newRange.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+          return;
+        }
+      }
+
+      convertListItemToBlock(li, sel);
+    },
+    [convertListItemToBlock]
+  );
+
+  const toggleList = useCallback(
+    (type: "ul" | "ol") => {
+      editorRef.current?.focus();
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) {
+        document.execCommand(type === "ul" ? "insertUnorderedList" : "insertOrderedList", false);
+        updateFormats();
+        return;
+      }
+
+      const range = sel.getRangeAt(0);
+      const li =
+        range.startContainer.nodeType === Node.ELEMENT_NODE
+          ? (range.startContainer as HTMLElement).closest("li")
+          : range.startContainer.parentElement?.closest("li");
+
+      if (!li || !editorRef.current?.contains(li)) {
+        document.execCommand(type === "ul" ? "insertUnorderedList" : "insertOrderedList", false);
+        updateFormats();
+        return;
+      }
+
+      const currentList = li.closest("ul, ol");
+      const currentType = currentList?.tagName.toLowerCase();
+
+      if (currentType === type) {
+        outdentListItem(li, sel);
+      } else {
+        const parentLi = currentList?.parentElement?.closest("li");
+        if (parentLi && currentList) {
+          if (currentList.children.length === 1) {
+            const newList = document.createElement(type);
+            while (currentList.firstChild) {
+              newList.appendChild(currentList.firstChild);
+            }
+            currentList.replaceWith(newList);
+          } else {
+            const newList = document.createElement(type);
+            currentList.parentNode?.insertBefore(newList, currentList.nextSibling);
+            newList.appendChild(li);
+          }
+        } else {
+          const prevLi = li.previousElementSibling as HTMLElement | null;
+          if (prevLi) {
+            let sublist = Array.from(prevLi.children).find(
+              (c) => c.tagName === "UL" || c.tagName === "OL"
+            ) as HTMLElement | undefined;
+            if (!sublist || sublist.tagName.toLowerCase() !== type) {
+              sublist = document.createElement(type);
+              prevLi.appendChild(sublist);
+            }
+            sublist.appendChild(li);
+          } else {
+            document.execCommand(
+              type === "ul" ? "insertUnorderedList" : "insertOrderedList",
+              false
+            );
+          }
+        }
+      }
+
+      updateFormats();
+    },
+    [outdentListItem, updateFormats]
+  );
+
+  const exec = useCallback(
+    (cmd: string, val: any = null) => {
+      editorRef.current?.focus();
+
+      if (cmd === "insertUnorderedList") {
+        toggleList("ul");
+        return;
+      }
+      if (cmd === "insertOrderedList") {
+        toggleList("ol");
+        return;
+      }
+
+      document.execCommand(cmd, false, val);
+      updateFormats();
+    },
+    [toggleList, updateFormats]
+  );
+
+  const handleEditorKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // 1. Enter on empty list item -> Outdent or exit list
+      if (e.key === "Enter" && !e.shiftKey) {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const li =
+          range.startContainer.nodeType === Node.ELEMENT_NODE
+            ? (range.startContainer as HTMLElement).closest("li")
+            : range.startContainer.parentElement?.closest("li");
+
+        if (li && editorRef.current?.contains(li)) {
+          const text = li.textContent?.replace(/[\u200B\u00A0\s]/g, "");
+          const hasMedia = li.querySelector("img, svg, iframe, math");
+
+          if (!text && !hasMedia) {
+            e.preventDefault();
+            outdentListItem(li, sel);
+            updateFormats();
+            return;
+          }
+        }
+      }
+
+      // 2. Backspace at start of list item -> Outdent or exit list
+      if (e.key === "Backspace") {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount || !sel.isCollapsed) return;
+        const range = sel.getRangeAt(0);
+        const li =
+          range.startContainer.nodeType === Node.ELEMENT_NODE
+            ? (range.startContainer as HTMLElement).closest("li")
+            : range.startContainer.parentElement?.closest("li");
+
+        if (li && editorRef.current?.contains(li)) {
+          let isAtStart = false;
+          if (range.startContainer === li && range.startOffset === 0) {
+            isAtStart = true;
+          } else if (range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset === 0) {
+            let prev = range.startContainer.previousSibling;
+            let hasTextBefore = false;
+            while (prev) {
+              if (prev.textContent && prev.textContent.trim().length > 0) {
+                hasTextBefore = true;
+                break;
+              }
+              prev = prev.previousSibling;
+            }
+            if (!hasTextBefore) isAtStart = true;
+          }
+
+          if (isAtStart) {
+            e.preventDefault();
+            outdentListItem(li, sel);
+            updateFormats();
+            return;
+          }
+        }
+      }
+
+      // 3. Tab and Shift+Tab inside lists
+      if (e.key === "Tab") {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+
+        const li =
+          range.startContainer.nodeType === Node.ELEMENT_NODE
+            ? (range.startContainer as HTMLElement).closest("li")
+            : range.startContainer.parentElement?.closest("li");
+
+        if (li && editorRef.current?.contains(li)) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            outdentListItem(li, sel);
+          } else {
+            indentListItem(li, sel);
+          }
+          updateFormats();
+          return;
+        }
+      }
+
+      // 4. Ctrl+S to save
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+    },
+    [indentListItem, outdentListItem, updateFormats]
+  );
+
+  const applyFontSize = (sz: string) => {
+    setFontSize(sz);
+    restoreSelection();
+    editorRef.current?.focus();
+    document.execCommand("fontSize", false, "7");
+    const spans = editorRef.current?.querySelectorAll('font[size="7"]');
+    spans?.forEach((s) => {
+      s.removeAttribute("size");
+      (s as HTMLElement).style.fontSize = `${sz}px`;
+    });
+  };
+
+  const applyFontFamily = (ff: string) => {
+    setFontFamily(ff);
+    restoreSelection();
+    editorRef.current?.focus();
+    if (ff) document.execCommand("fontName", false, ff);
+  };
+
+  const insertMathSymbol = (sym: string) => {
+    restoreSelection();
+    editorRef.current?.focus();
+    document.execCommand("insertText", false, sym);
+    updateFormats();
+  };
+
+  const insertImageAtCursor = useCallback((url: string, alt: string = "image") => {
+    editorRef.current?.focus();
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = alt;
+    img.style.cssText =
+      "max-width:100%;border-radius:10px;margin:10px 0;display:block;cursor:pointer;";
+    img.contentEditable = "false";
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(img);
+      range.setStartAfter(img);
+      range.setEndAfter(img);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      editorRef.current?.appendChild(img);
+    }
+    return img;
+  }, []);
+
+  const insertPdfAtCursor = useCallback((att: AttachmentItem, fileName: string) => {
+    editorRef.current?.focus();
+    const block = document.createElement("div");
+    block.contentEditable = "false";
+    block.setAttribute("data-pdf", getAttachmentPath(att));
+    block.setAttribute("data-name", fileName);
+    block.style.cssText =
+      "display:flex;align-items:center;gap:10px;padding:10px 14px;margin:8px 0;border-radius:10px;background:rgba(59,130,246,0.12);border:1.5px solid #3b82f6;cursor:pointer;";
+    block.innerHTML = `<span style="font-size:1.5rem">📄</span><span style="font-weight:600;font-size:0.88rem">${fileName}</span>`;
+
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(block);
+      range.setStartAfter(block);
+      range.setEndAfter(block);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      editorRef.current?.appendChild(block);
+    }
+  }, []);
+
+  // Upload handler for attachments
+  const handleFileUpload = async (files: File[]) => {
+    if (!files.length) return;
+    const toastId = toast.loading("Uploading attachment…");
+
+    let currentFolder = attachmentFolder;
+    if (!currentFolder && title.trim()) {
+      currentFolder = buildAttachmentFolder(title);
+      setAttachmentFolder(currentFolder);
+    }
+
+    try {
+      for (const file of files) {
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = (ev) => resolve((ev.target?.result as string).split(",")[1]);
+          reader.onload = (e) => resolve((e.target?.result as string).split(",")[1]);
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
@@ -91,353 +522,322 @@ export const NoteModal: React.FC<NoteModalProps> = ({
             file: base64,
             filename: file.name,
             type: file.type,
-            folder: title.trim() || undefined,
+            folder: currentFolder || undefined,
           }),
         });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Upload failed");
-
-        const newAtt: AttachmentItem = {
-          filename: file.name,
-          type: file.type,
-          path: data.path,
-          publicId: data.publicId,
-          size: file.size,
-        };
-
-        setAttachments((prev) => [...prev, newAtt]);
-
-        if (file.type.startsWith("image/")) {
-          execCmd("insertImage", data.path);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Upload failed");
         }
 
-        toast.success(`Attached ${file.name}`);
-      } catch (err: any) {
-        toast.error(`Failed to upload ${file.name}`);
+        const data = await res.json();
+        const newAttachment: AttachmentItem = {
+          name: file.name,
+          url: data.path,
+          type: file.type,
+          size: file.size,
+          path: data.path,
+          publicId: data.publicId,
+        };
+
+        setNoteAttachments((prev) => [...prev, newAttachment]);
+
+        if (file.type.startsWith("image/")) {
+          insertImageAtCursor(data.path, file.name);
+        } else if (file.type === "application/pdf") {
+          insertPdfAtCursor(newAttachment, file.name);
+        }
       }
+      toast.success("Attachment added!", { id: toastId });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload", { id: toastId });
     }
-    setUploadingAttachment(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const removeAttachment = async (att: AttachmentItem) => {
-    if (att.publicId) {
-      try {
-        await fetch("/tools/study-vault/api/attachments", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ publicId: att.publicId }),
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter((item) => item.type.startsWith("image/"));
+    if (imageItems.length > 0) {
+      e.preventDefault();
+      const files = imageItems.map((item) => item.getAsFile()).filter(Boolean) as File[];
+      handleFileUpload(files);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      handleFileUpload(files);
+    }
+  };
+
+  // Image selection overlay logic
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "IMG" && editor.contains(target)) {
+        const img = target as HTMLImageElement;
+        setSelectedImage(img);
+        const imgRect = img.getBoundingClientRect();
+        const editorRect = editor.getBoundingClientRect();
+        setDeleteIconPos({
+          top: imgRect.top - editorRect.top + editor.scrollTop - 8,
+          left: imgRect.right - editorRect.left + editor.scrollLeft - 14,
         });
-      } catch {}
-    }
-    setAttachments((prev) => prev.filter((a) => a.path !== att.path));
+      } else {
+        setSelectedImage(null);
+      }
+    };
+
+    editor.addEventListener("click", handleClick);
+    return () => editor.removeEventListener("click", handleClick);
+  }, []);
+
+  const removeImage = (img: HTMLImageElement) => {
+    img.remove();
+    setSelectedImage(null);
+    updateFormats();
   };
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const content = editorRef.current?.innerHTML || "";
-    if (!title.trim() && !content.trim()) {
-      toast.error("Please add a title or content to save.");
+  const handleSave = async () => {
+    if (!title.trim()) {
+      toast.error("Please enter a note title");
       return;
     }
 
     setSaving(true);
     try {
+      const rawContent = editorRef.current?.innerHTML || "";
+      const finalAttachments = collectAttachmentsFromContent(
+        rawContent,
+        noteAttachments,
+        attachmentFolder
+      );
+
       await onSave({
         title: title.trim(),
-        content,
+        content: rawContent,
         projectId: selectedProjectId,
-        attachments,
+        attachments: finalAttachments,
+        attachmentFolder,
       });
-      onClose();
     } catch (err: any) {
-      toast.error("Failed to save note: " + err.message);
+      // toast shown in parent
     } finally {
       setSaving(false);
     }
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        handleSubmit();
-      } else if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [title, selectedProjectId, attachments]);
+  // Themes matching original study-vault-v10
+  const bg = d ? "#0f172a" : "#ffffff";
+  const border = d ? "#1e293b" : "#e2e8f0";
+  const surface = d ? "#1e293b" : "#f1f5f9";
+  const text = d ? "#f1f5f9" : "#0f172a";
+  const muted = d ? "#94a3b8" : "#64748b";
+  const editorBg = d ? "#020617" : "#ffffff";
+
+  const selStyle: React.CSSProperties = {
+    padding: "3px 6px",
+    borderRadius: 6,
+    border: `1px solid ${border}`,
+    background: surface,
+    color: text,
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: "pointer",
+    outline: "none",
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-fadeIn">
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.65)",
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        backdropFilter: "blur(4px)",
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
-        className={`rounded-3xl max-w-4xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden border ${
-          d ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
-        }`}
+        style={{
+          background: bg,
+          borderRadius: 20,
+          border: `1px solid ${border}`,
+          width: "100%",
+          maxWidth: 880,
+          height: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
+          overflow: "hidden",
+        }}
       >
-        {/* Header */}
+        {/* Top Header: Title & Project selector */}
         <div
-          className={`px-6 py-4 border-b flex items-center justify-between gap-4 shrink-0 ${
-            d ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-slate-50/70"
-          }`}
+          style={{
+            padding: "14px 18px",
+            borderBottom: `1px solid ${border}`,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 12,
+          }}
         >
           <input
             type="text"
-            autoFocus
+            placeholder="Note title..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Note Title…"
-            className={`flex-1 text-lg sm:text-xl font-bold bg-transparent focus:outline-none ${
-              d ? "text-white placeholder-slate-500" : "text-slate-900 placeholder-slate-400"
-            }`}
+            style={{
+              flex: 1,
+              minWidth: 200,
+              fontSize: 18,
+              fontWeight: 700,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: text,
+            }}
+            autoFocus
           />
 
-          <div className="flex items-center gap-2 shrink-0">
-            <select
-              value={selectedProjectId || ""}
-              onChange={(e) => setSelectedProjectId(e.target.value || null)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                d
-                  ? "bg-slate-800 border-slate-700 text-slate-200"
-                  : "bg-white border-slate-300 text-slate-700"
-              }`}
-            >
-              <option value="">No Subject</option>
-              {allProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+          <select
+            value={selectedProjectId || ""}
+            onChange={(e) => setSelectedProjectId(e.target.value || null)}
+            style={{ ...selStyle, height: 34, fontSize: 13, minWidth: 140 }}
+          >
+            <option value="">No Subject (General)</option>
+            {allProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                📁 {p.name}
+              </option>
+            ))}
+          </select>
 
-            <button
-              type="button"
-              onClick={onClose}
-              className={`p-1.5 rounded-lg transition ${
-                d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-              }`}
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: `1px solid ${border}`,
+              background: "transparent",
+              color: muted,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 16,
+            }}
+          >
+            ✕
+          </button>
         </div>
 
         {/* Toolbar */}
-        <div
-          className={`px-6 py-2 border-b flex items-center gap-1 flex-wrap shrink-0 ${
-            d ? "border-slate-800 bg-slate-950/60" : "border-slate-200 bg-slate-50"
-          }`}
-        >
-          <button
-            type="button"
-            onClick={() => execCmd("bold")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Bold (Ctrl+B)"
-          >
-            <Bold size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => execCmd("italic")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Italic (Ctrl+I)"
-          >
-            <Italic size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => execCmd("underline")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Underline (Ctrl+U)"
-          >
-            <Underline size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => execCmd("strikeThrough")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Strikethrough"
-          >
-            <Strikethrough size={15} />
-          </button>
-
-          <div className={`w-px h-4 mx-1 ${d ? "bg-slate-800" : "bg-slate-200"}`} />
-
-          <button
-            type="button"
-            onClick={() => execCmd("formatBlock", "<h1>")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Heading 1"
-          >
-            <Heading1 size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => execCmd("formatBlock", "<h2>")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Heading 2"
-          >
-            <Heading2 size={15} />
-          </button>
-
-          <div className={`w-px h-4 mx-1 ${d ? "bg-slate-800" : "bg-slate-200"}`} />
-
-          <button
-            type="button"
-            onClick={() => execCmd("insertUnorderedList")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Bullet List"
-          >
-            <List size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => execCmd("insertOrderedList")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Numbered List"
-          >
-            <ListOrdered size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => execCmd("formatBlock", "<pre>")}
-            className={`p-1.5 rounded transition ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Code Block"
-          >
-            <Code size={15} />
-          </button>
-
-          <div className={`w-px h-4 mx-1 ${d ? "bg-slate-800" : "bg-slate-200"}`} />
-
-          <label
-            className={`flex items-center gap-1 p-1.5 rounded transition cursor-pointer ${
-              d ? "text-slate-400 hover:text-white hover:bg-slate-800" : "text-slate-600 hover:text-slate-900 hover:bg-slate-200"
-            }`}
-            title="Attach Image or PDF"
-          >
-            {uploadingAttachment ? (
-              <Loader2 size={15} className="animate-spin text-blue-500" />
-            ) : (
-              <Paperclip size={15} />
-            )}
-            <span className="text-xs font-semibold ml-0.5">Attach</span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*,application/pdf"
-              className="hidden"
-              onChange={handleFileUpload}
-              disabled={uploadingAttachment}
-            />
-          </label>
-        </div>
+        <NoteModalToolbar
+          d={d}
+          bg={bg}
+          border={border}
+          text={text}
+          muted={muted}
+          surface={surface}
+          selStyle={selStyle}
+          activeFormats={activeFormats}
+          exec={exec}
+          fontFamily={fontFamily}
+          applyFontFamily={applyFontFamily}
+          fontSize={fontSize}
+          applyFontSize={applyFontSize}
+          colorPickerRef={colorPickerRef}
+          saveSelection={saveSelection}
+          showColorPicker={showColorPicker}
+          setShowColorPicker={setShowColorPicker}
+          restoreSelection={restoreSelection}
+          handleFileUpload={handleFileUpload}
+          showMathBar={showMathBar}
+          setShowMathBar={setShowMathBar}
+          setShowShortcutsModal={setShowShortcutsModal}
+          insertMathSymbol={insertMathSymbol}
+          editorRef={editorRef}
+        />
 
         {/* Editor Body */}
-        <div className={`flex-1 p-6 overflow-y-auto min-h-0 ${d ? "bg-slate-900" : "bg-white"}`}>
-          <div
-            ref={editorRef}
-            contentEditable
-            suppressContentEditableWarning
-            className={`w-full h-full min-h-[300px] text-sm focus:outline-none max-w-none leading-relaxed ${
-              d ? "text-slate-200 prose prose-invert" : "text-slate-800 prose"
-            }`}
-            style={{ minHeight: "100%" }}
-          />
-        </div>
+        <NoteModalEditor
+          editorRef={editorRef}
+          handleKeyDown={handleEditorKeyDown}
+          updateFormats={updateFormats}
+          handlePaste={handlePaste}
+          setIsDragging={setIsDragging}
+          handleDrop={handleDrop}
+          isDragging={isDragging}
+          border={border}
+          text={text}
+          editorBg={editorBg}
+          selectedImage={selectedImage}
+          deleteIconPos={deleteIconPos}
+          removeImage={removeImage}
+        />
 
-        {/* Attachments Section */}
-        {attachments.length > 0 && (
+        {/* Attachment tray at bottom if any attachments */}
+        {noteAttachments.length > 0 && (
           <div
-            className={`px-6 py-2.5 border-t shrink-0 flex items-center gap-2 overflow-x-auto ${
-              d ? "bg-slate-950/70 border-slate-800" : "bg-slate-50 border-slate-200"
-            }`}
+            style={{
+              padding: "10px 18px",
+              borderTop: `1px solid ${border}`,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              overflowX: "auto",
+              background: surface,
+            }}
           >
-            <span className={`text-[11px] font-bold shrink-0 ${d ? "text-slate-400" : "text-slate-500"}`}>
-              Attachments ({attachments.length}):
-            </span>
-            {attachments.map((att, idx) => (
-              <div
-                key={idx}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs shrink-0 ${
-                  d
-                    ? "bg-slate-800 border-slate-700 text-slate-300"
-                    : "bg-white border-slate-200 text-slate-700 shadow-sm"
-                }`}
-              >
-                {att.type === "application/pdf" ? (
-                  <BookOpen size={12} className="text-blue-500" />
-                ) : (
-                  <Paperclip size={12} className="text-emerald-500" />
-                )}
-                <span className="truncate max-w-[140px] text-[11px]">
-                  {att.filename || "file"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(att)}
-                  className="text-slate-400 hover:text-red-500 p-0.5 ml-1"
-                >
-                  <X size={12} />
-                </button>
+            <span style={{ fontSize: 11, fontWeight: 700, color: muted }}>ATTACHMENTS:</span>
+            {noteAttachments.map((att, i) => (
+              <div key={i} style={{ width: 100, height: 75, flexShrink: 0 }}>
+                <AttachmentPreview
+                  attachment={att}
+                  isDarkMode={d}
+                  onRemove={() =>
+                    setNoteAttachments((prev) => prev.filter((_, idx) => idx !== i))
+                  }
+                />
               </div>
             ))}
           </div>
         )}
 
         {/* Footer */}
-        <div
-          className={`px-6 py-3.5 border-t flex items-center justify-between shrink-0 ${
-            d ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-slate-50"
-          }`}
-        >
-          <p className="text-xs text-slate-400 font-mono">
-            Press <kbd className={`px-1.5 py-0.5 rounded ${d ? "bg-slate-800 text-slate-300" : "bg-slate-200 text-slate-700"}`}>Ctrl+S</kbd> to save
-          </p>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
-                d ? "bg-slate-800 hover:bg-slate-700 text-slate-300" : "bg-slate-200 hover:bg-slate-300 text-slate-700"
-              }`}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white shadow-sm transition"
-            >
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-              <span>Save Note</span>
-            </button>
-          </div>
-        </div>
+        <NoteModalFooter
+          onClose={onClose}
+          handleSave={handleSave}
+          border={border}
+          bg={bg}
+          muted={muted}
+          surface={surface}
+          existingNote={existingNote}
+        />
       </div>
+
+      <ShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+        isDarkMode={d}
+      />
     </div>
   );
 };

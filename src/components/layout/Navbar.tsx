@@ -3,6 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { LogOut, User as UserIcon, Settings, Menu } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,6 +11,11 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function Navbar() {
   const { data: session, status } = useSession();
   const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
+
+  if (pathname?.startsWith("/tools/study-vault")) {
+    return null;
+  }
 
   return (
     <nav className="sticky top-0 z-50 w-full backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 transition-colors">

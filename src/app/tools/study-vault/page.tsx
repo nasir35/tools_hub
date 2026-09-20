@@ -48,7 +48,9 @@ import { NoteDetailView } from "./components/NoteDetailView";
 import { ProjectModal } from "./components/ProjectModal";
 import { SummaryPage } from "./components/SummaryPage";
 import { NASPanel } from "./components/NASPanel";
+import { SortButton } from "./components/SortButton";
 import { exportStudySnipsPdf } from "./utils/exportStudySnipsPdf";
+import { exportToPDF } from "./utils/pdfExporter";
 
 export default function StudyVaultApp() {
   const router = useRouter();
@@ -83,10 +85,12 @@ export default function StudyVaultApp() {
   const [activeView, setActiveView] = useState<"notes" | "pdfs" | "sessions" | "summary">("notes");
   const [activeProject, setActiveProject] = useState<ProjectEntry | "all">("all");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<"compact" | "medium" | "expanded">("medium");
+  const [viewMode, setViewMode] = useState<"large" | "medium" | "list">("medium");
 
   // Filter & Search
   const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
   const [dateFilter, setDateFilter] = useState<"all" | "3days" | "7days" | "month">("all");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "name" | "snips">("newest");
 
@@ -491,6 +495,25 @@ export default function StudyVaultApp() {
     return result;
   }, [pdfs, activeProject, searchQuery, sortOrder]);
 
+  // Instant Search Results
+  const matchingNotes = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return notes.filter(
+      (n) => n.title.toLowerCase().includes(q) || n.content?.toLowerCase().includes(q)
+    );
+  }, [notes, searchQuery]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // If a note is selected, show detail view
   if (selectedNote) {
     const proj = projects.find((p) => p.id === selectedNote.projectId) || null;
@@ -795,8 +818,8 @@ export default function StudyVaultApp() {
             isDarkMode ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-white/95"
           } shrink-0 flex items-center justify-between gap-4 flex-wrap`}
         >
-          {/* Search bar */}
-          <div className="relative flex-1 max-w-md min-w-[200px]">
+          {/* Search bar with instant live dropdown */}
+          <div className="relative flex-1 max-w-md min-w-[200px]" ref={searchRef}>
             <Search
               size={14}
               className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${
@@ -806,7 +829,19 @@ export default function StudyVaultApp() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSearchResults(true);
+              }}
+              onFocus={() => {
+                if (searchQuery.trim()) setShowSearchResults(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && matchingNotes.length > 0) {
+                  setSelectedNote(matchingNotes[0]);
+                  setShowSearchResults(false);
+                }
+              }}
               placeholder="Search notes, textbooks, snips…"
               className={`w-full pl-9 pr-3 py-1.5 rounded-xl text-xs border ${
                 isDarkMode
@@ -814,6 +849,42 @@ export default function StudyVaultApp() {
                   : "bg-slate-100 border-slate-200 text-slate-900 placeholder-slate-400"
               } focus:outline-none focus:ring-2 focus:ring-blue-500`}
             />
+
+            {showSearchResults && matchingNotes.length > 0 && (
+              <div
+                className={`absolute top-full left-0 right-0 mt-2 rounded-2xl border shadow-2xl max-h-72 overflow-y-auto z-50 py-1 ${
+                  isDarkMode
+                    ? "bg-slate-900 border-slate-700 text-white"
+                    : "bg-white border-slate-200 text-slate-900"
+                }`}
+              >
+                {matchingNotes.slice(0, 5).map((note) => (
+                  <button
+                    key={note.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedNote(note);
+                      setShowSearchResults(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 border-b transition last:border-b-0 ${
+                      isDarkMode
+                        ? "border-slate-800 hover:bg-slate-800"
+                        : "border-slate-100 hover:bg-blue-50/60"
+                    }`}
+                  >
+                    <div className="font-semibold text-xs truncate">{note.title}</div>
+                    <div className="text-[11px] opacity-60 line-clamp-1 mt-0.5">
+                      {note.content?.replace(/<[^>]*>/g, " ").slice(0, 70)}
+                    </div>
+                  </button>
+                ))}
+                {matchingNotes.length > 5 && (
+                  <div className="text-center py-2 text-[11px] opacity-50">
+                    +{matchingNotes.length - 5} more results
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Action buttons and view controls */}
@@ -836,61 +907,73 @@ export default function StudyVaultApp() {
               <>
                 {/* View Mode Toggle */}
                 <div
-                  className={`flex items-center p-1 rounded-xl border ${
+                  className={`flex items-center p-0.5 rounded-xl border ${
                     isDarkMode
                       ? "bg-slate-800 border-slate-700 text-slate-400"
                       : "bg-slate-100 border-slate-200 text-slate-500"
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("compact")}
-                    className={`p-1 rounded-lg transition ${
-                      viewMode === "compact"
-                        ? isDarkMode
-                          ? "bg-slate-700 text-white"
-                          : "bg-white text-slate-900 shadow-sm"
-                        : isDarkMode
-                        ? "hover:text-white"
-                        : "hover:text-slate-900"
-                    }`}
-                    title="Compact view"
-                  >
-                    <LayoutGrid size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("medium")}
-                    className={`p-1 rounded-lg transition ${
-                      viewMode === "medium"
-                        ? isDarkMode
-                          ? "bg-slate-700 text-white"
-                          : "bg-white text-slate-900 shadow-sm"
-                        : isDarkMode
-                        ? "hover:text-white"
-                        : "hover:text-slate-900"
-                    }`}
-                    title="Grid view"
-                  >
-                    <LayoutGrid size={15} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("expanded")}
-                    className={`p-1 rounded-lg transition ${
-                      viewMode === "expanded"
-                        ? isDarkMode
-                          ? "bg-slate-700 text-white"
-                          : "bg-white text-slate-900 shadow-sm"
-                        : isDarkMode
-                        ? "hover:text-white"
-                        : "hover:text-slate-900"
-                    }`}
-                    title="Expanded view"
-                  >
-                    <LayoutGrid size={18} />
-                  </button>
+                  {[
+                    { mode: "large", label: "▦" },
+                    { mode: "medium", label: "▥▥" },
+                    { mode: "list", label: "☰" },
+                  ].map(({ mode, label }) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setViewMode(mode as any)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                        viewMode === mode
+                          ? isDarkMode
+                            ? "bg-slate-700 text-white"
+                            : "bg-white text-slate-900 shadow-sm"
+                          : isDarkMode
+                          ? "hover:text-white"
+                          : "hover:text-slate-900"
+                      }`}
+                      title={`${mode} view`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
+
+                {/* Sort dropdown */}
+                <SortButton
+                  sortOrder={sortOrder}
+                  setSortOrder={setSortOrder}
+                  isDarkMode={isDarkMode}
+                />
+
+                {/* Date filter dropdown */}
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value as any)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs border font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isDarkMode
+                      ? "bg-slate-800 border-slate-700 text-slate-200"
+                      : "bg-white border-slate-200 text-slate-700 shadow-sm"
+                  }`}
+                >
+                  <option value="all">All Time</option>
+                  <option value="3days">Last 3 Days</option>
+                  <option value="7days">Last 7 Days</option>
+                  <option value="month">Last Month</option>
+                </select>
+
+                {/* Export to PDF */}
+                <button
+                  type="button"
+                  onClick={() => exportToPDF(filteredNotes)}
+                  className={`p-1.5 rounded-xl border transition ${
+                    isDarkMode
+                      ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                      : "bg-white border-slate-200 text-slate-600 hover:text-slate-900 shadow-sm"
+                  }`}
+                  title="Export Notes as PDF"
+                >
+                  📥
+                </button>
 
                 <button
                   type="button"
@@ -1006,23 +1089,89 @@ export default function StudyVaultApp() {
 
               {filteredPdfs.length === 0 ? (
                 <div
-                  className={`py-20 text-center rounded-3xl border p-8 space-y-3 ${
+                  className={`py-16 text-center rounded-3xl border p-8 space-y-5 ${
                     isDarkMode
                       ? "bg-slate-900/40 border-slate-800"
                       : "bg-white border-slate-200 shadow-sm"
                   }`}
                 >
-                  <BookOpen
-                    className={`w-12 h-12 mx-auto ${
-                      isDarkMode ? "text-slate-600" : "text-slate-400"
+                  <div
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
+                      isDarkMode ? "bg-blue-500/10 text-blue-400" : "bg-blue-50 text-blue-600"
                     }`}
-                  />
-                  <h3 className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-                    No PDF documents found
-                  </h3>
-                  <p className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-                    Link a local file path on your computer for instant streaming, or upload a PDF.
-                  </p>
+                  >
+                    <BookOpen size={28} />
+                  </div>
+                  <div>
+                    <h3 className={`text-base font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                      No PDF documents in your library
+                    </h3>
+                    <p className={`text-xs max-w-md mx-auto mt-1 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                      Link a local file path on your computer for instantaneous local streaming, scan an entire textbook folder, or upload directly to the cloud.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalModalTab("path");
+                        setShowLocalModal(true);
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col items-center text-center gap-2 group ${
+                        isDarkMode
+                          ? "bg-slate-900 border-slate-800 hover:border-blue-500"
+                          : "bg-slate-50 border-slate-200 hover:border-blue-500 shadow-sm"
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                        <HardDrive size={20} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-xs">Link Local PDF</div>
+                        <div className="text-[10px] opacity-60">Stream by file path</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalModalTab("scan");
+                        setShowLocalModal(true);
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col items-center text-center gap-2 group ${
+                        isDarkMode
+                          ? "bg-slate-900 border-slate-800 hover:border-blue-500"
+                          : "bg-slate-50 border-slate-200 hover:border-blue-500 shadow-sm"
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center">
+                        <FolderSearch size={20} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-xs">Scan Folder</div>
+                        <div className="text-[10px] opacity-60">Batch import books</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`p-4 rounded-2xl border text-left transition flex flex-col items-center text-center gap-2 group ${
+                        isDarkMode
+                          ? "bg-slate-900 border-slate-800 hover:border-blue-500"
+                          : "bg-slate-50 border-slate-200 hover:border-blue-500 shadow-sm"
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                        <Upload size={20} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-xs">Upload Cloud PDF</div>
+                        <div className="text-[10px] opacity-60">Store in cloud</div>
+                      </div>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

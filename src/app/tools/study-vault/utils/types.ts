@@ -81,9 +81,11 @@ export interface TabItem {
 }
 
 export interface AttachmentItem {
+  name?: string;
   filename?: string;
   type?: string;
-  path: string;
+  path?: string;
+  url?: string;
   folder?: string | null;
   publicId?: string | null;
   size?: number;

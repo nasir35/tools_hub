@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   ArrowLeft,
   Edit3,
@@ -11,10 +11,12 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { NoteEntry, ProjectEntry } from "../utils/types";
+import { getAttachmentUrl } from "../utils/attachmentPaths";
 
 interface NoteDetailViewProps {
   note: NoteEntry;
   project?: ProjectEntry | null;
+  projects?: ProjectEntry[];
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -32,174 +34,290 @@ export const NoteDetailView: React.FC<NoteDetailViewProps> = ({
   isDarkMode = false,
 }) => {
   const d = isDarkMode;
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [pdfInline, setPdfInline] = useState<string | null>(null);
+
+  const date = new Date(note.updatedAt);
+  const dateStr = date.toLocaleDateString();
+  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div
-      className={`fixed inset-0 z-50 overflow-y-auto flex flex-col ${
-        d ? "bg-slate-950 text-slate-100" : "bg-slate-50 text-slate-900"
-      }`}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        overflowY: "auto",
+        background: d ? "#020617" : "#f8fafc",
+        color: d ? "#f1f5f9" : "#0f172a",
+        display: "flex",
+        flexDirection: "column",
+      }}
     >
-      {/* Top Navbar */}
+      {/* Top Header */}
       <div
-        className={`px-6 py-4 border-b sticky top-0 z-30 backdrop-blur-md flex items-center justify-between gap-4 ${
-          d ? "border-slate-800 bg-slate-900/90" : "border-slate-200 bg-white/90 shadow-sm"
-        }`}
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          borderBottom: d ? "1px solid #1e293b" : "1px solid #e2e8f0",
+          background: d ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(8px)",
+          padding: "10px 18px",
+        }}
       >
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className={`p-2 rounded-xl transition ${
-              d
-                ? "text-slate-400 hover:text-white hover:bg-slate-800"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            }`}
-            title="Back to Notes"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className={`text-lg font-bold line-clamp-1 ${d ? "text-white" : "text-slate-900"}`}>
-                {note.title || "Untitled Note"}
-              </h1>
-              {project && (
-                <span
-                  className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                  style={{
-                    backgroundColor: d ? `${project.color}33` : `${project.color}1a`,
-                    color: project.color,
-                  }}
-                >
-                  {project.name}
-                </span>
-              )}
-            </div>
-            <p
-              className={`text-xs flex items-center gap-1.5 mt-0.5 ${
-                d ? "text-slate-400" : "text-slate-500"
-              }`}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <button
+              onClick={onBack}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 13,
+                background: d ? "#1e293b" : "#f1f5f9",
+                color: d ? "#94a3b8" : "#475569",
+              }}
             >
-              <Calendar size={12} />
-              <span>Updated {new Date(note.updatedAt).toLocaleDateString()}</span>
-            </p>
+              ← Back
+            </button>
+            <span style={{ color: d ? "#475569" : "#9ca3af", fontSize: 13 }}>/</span>
+            <span
+              style={{
+                color: d ? "#64748b" : "#64748b",
+                fontSize: 13,
+                maxWidth: 120,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {project?.name || "All Notes"}
+            </span>
+            <span style={{ color: d ? "#475569" : "#9ca3af", fontSize: 13 }}>/</span>
+            <span
+              style={{
+                color: d ? "#cbd5e1" : "#334155",
+                fontSize: 13,
+                fontWeight: 600,
+                maxWidth: 220,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {note.title}
+            </span>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition border ${
-              d
-                ? "bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200"
-                : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800 shadow-sm"
-            }`}
-          >
-            <Edit3 size={13} />
-            <span>Edit</span>
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className={`p-2 rounded-xl transition ${
-              d
-                ? "text-slate-400 hover:text-red-400 hover:bg-slate-800"
-                : "text-slate-400 hover:text-red-600 hover:bg-red-50"
-            }`}
-            title="Delete Note"
-          >
-            <Trash2 size={16} />
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={onEdit}
+              style={{
+                padding: "7px 12px",
+                borderRadius: 8,
+                border: "none",
+                cursor: "pointer",
+                background: "#3b82f6",
+                color: "#fff",
+                fontWeight: 600,
+                fontSize: 13,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+              title="Edit Note"
+            >
+              <span>✏️</span>
+              <span>Edit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteConfirm(true)}
+              style={{
+                padding: "7px 10px",
+                borderRadius: 8,
+                border: "none",
+                cursor: "pointer",
+                background: d ? "rgba(239,68,68,0.15)" : "#fee2e2",
+                color: "#ef4444",
+              }}
+              title="Delete Note"
+            >
+              🗑️
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Main Reading View */}
-      <div className="flex-1 max-w-4xl w-full mx-auto p-6 sm:p-10 space-y-8">
-        {/* Content Body */}
+      {/* Note Content Section */}
+      <div style={{ maxWidth: 840, width: "100%", margin: "0 auto", padding: "28px 18px", flex: 1 }}>
+        <h1
+          style={{
+            fontSize: "clamp(1.5rem, 4vw, 2.2rem)",
+            fontWeight: 800,
+            marginBottom: 8,
+            color: d ? "#f1f5f9" : "#0f172a",
+            lineHeight: 1.25,
+          }}
+        >
+          {note.title || "Untitled Note"}
+        </h1>
+
         <div
-          className={`prose max-w-none leading-relaxed text-sm sm:text-base font-sans break-words ${
-            d ? "prose-invert text-slate-200" : "text-slate-800"
-          }`}
+          style={{
+            display: "flex",
+            gap: 16,
+            marginBottom: 24,
+            fontSize: 13,
+            color: d ? "#64748b" : "#94a3b8",
+            flexWrap: "wrap",
+          }}
+        >
+          <span>📅 {dateStr}</span>
+          <span>🕐 {timeStr}</span>
+          {project?.name && <span>📁 {project.name}</span>}
+        </div>
+
+        {/* Note Body */}
+        <div
+          style={{
+            borderRadius: 16,
+            padding: "24px 28px",
+            background: d ? "#0f172a" : "#ffffff",
+            border: d ? "1px solid #1e293b" : "1px solid #e2e8f0",
+            boxShadow: d ? "0 4px 20px rgba(0,0,0,0.3)" : "0 2px 12px rgba(0,0,0,0.05)",
+            lineHeight: 1.8,
+            fontSize: 15,
+            wordBreak: "break-word",
+          }}
+          className="prose dark:prose-invert max-w-none"
           dangerouslySetInnerHTML={{
-            __html: note.content || "<i class='opacity-60'>No content in this note.</i>",
+            __html: note.content || "<p style='color:#94a3b8;font-style:italic;'>No content.</p>",
           }}
         />
 
-        {/* Attachments & PDFs */}
+        {/* Attached Files & PDFs */}
         {(note.attachments || []).length > 0 && (
-          <div className={`pt-8 border-t space-y-4 ${d ? "border-slate-800" : "border-slate-200"}`}>
+          <div style={{ marginTop: 32 }}>
             <h3
-              className={`text-xs font-bold uppercase tracking-wider ${
-                d ? "text-slate-400" : "text-slate-500"
-              }`}
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                color: d ? "#94a3b8" : "#64748b",
+                marginBottom: 12,
+              }}
             >
-              Attached Documents & Media ({note.attachments?.length})
+              ATTACHED DOCUMENTS & MEDIA ({note.attachments?.length})
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {note.attachments?.map((att, idx) => {
                 const isPdf =
-                  att.type === "application/pdf" || att.path?.toLowerCase().endsWith(".pdf");
+                  att.type === "application/pdf" || att.name?.toLowerCase().endsWith(".pdf");
+                const url = getAttachmentUrl(att);
+                const isOpen = pdfInline === url;
 
                 return (
-                  <div
-                    key={idx}
-                    className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
-                      d ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200 shadow-sm"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`p-2 rounded-xl shrink-0 ${
-                          d ? "bg-slate-800 text-blue-400" : "bg-blue-50 text-blue-600"
-                        }`}
+                  <div key={idx} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "10px 16px",
+                        borderRadius: 12,
+                        background: d ? "#0f172a" : "#ffffff",
+                        border: d ? "1px solid #1e293b" : "1px solid #e2e8f0",
+                      }}
+                    >
+                      <span style={{ fontSize: "1.4rem" }}>{isPdf ? "📄" : "🖼️"}</span>
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 13,
+                          flex: 1,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
                       >
-                        {isPdf ? <BookOpen size={18} /> : <ImageIcon size={18} />}
-                      </div>
-                      <div className="min-w-0">
-                        <p
-                          className={`text-xs font-bold truncate ${
-                            d ? "text-slate-200" : "text-slate-900"
-                          }`}
-                        >
-                          {att.filename || "Attachment"}
-                        </p>
-                        <p
-                          className={`text-[10px] font-mono ${
-                            d ? "text-slate-500" : "text-slate-400"
-                          }`}
-                        >
-                          {isPdf ? "PDF Document" : "Media file"}
-                        </p>
-                      </div>
-                    </div>
+                        {att.name}
+                      </span>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {isPdf && onOpenStudyPdf ? (
-                        <button
-                          type="button"
-                          onClick={() => onOpenStudyPdf(att.path, att.filename || "Document")}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
-                        >
-                          <BookOpen size={12} />
-                          <span>Study Mode</span>
-                        </button>
+                      {isPdf ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            type="button"
+                            onClick={() => setPdfInline(isOpen ? null : url)}
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 8,
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: d ? "#1e293b" : "#f1f5f9",
+                              color: d ? "#e2e8f0" : "#334155",
+                            }}
+                          >
+                            {isOpen ? "✕ Close" : "📖 Preview"}
+                          </button>
+                          {onOpenStudyPdf && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenStudyPdf(url, att.name || att.filename || "Document")}
+                              style={{
+                                padding: "5px 12px",
+                                borderRadius: 8,
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                background: "#3b82f6",
+                                color: "#fff",
+                              }}
+                            >
+                              🎓 Study
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <a
-                          href={att.path}
+                          href={url}
                           target="_blank"
                           rel="noreferrer"
-                          className={`p-1.5 rounded-lg transition ${
-                            d
-                              ? "text-slate-400 hover:text-white hover:bg-slate-800"
-                              : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                          }`}
-                          title="Open file in new tab"
+                          style={{
+                            padding: "5px 12px",
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            background: d ? "#1e293b" : "#f1f5f9",
+                            color: "#3b82f6",
+                            textDecoration: "none",
+                          }}
                         >
-                          <ExternalLink size={14} />
+                          View Image ↗
                         </a>
                       )}
                     </div>
+
+                    {isOpen && isPdf && (
+                      <iframe
+                        src={url}
+                        style={{
+                          width: "100%",
+                          height: "65vh",
+                          borderRadius: 12,
+                          border: d ? "1px solid #1e293b" : "1px solid #cbd5e1",
+                        }}
+                        title={att.name}
+                      />
+                    )}
                   </div>
                 );
               })}
@@ -207,6 +325,88 @@ export const NoteDetailView: React.FC<NoteDetailViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 60,
+            padding: 16,
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <div
+            style={{
+              borderRadius: 20,
+              padding: 24,
+              maxWidth: 360,
+              width: "100%",
+              background: d ? "#0f172a" : "#fff",
+              border: d ? "1px solid #1e293b" : "1px solid #e2e8f0",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "1.1rem",
+                fontWeight: 700,
+                marginBottom: 6,
+                color: d ? "#f1f5f9" : "#0f172a",
+              }}
+            >
+              Delete this note?
+            </p>
+            <p style={{ fontSize: 13, marginBottom: 20, color: d ? "#94a3b8" : "#64748b" }}>
+              This will permanently delete this note and cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: 10,
+                  border: `1px solid ${d ? "#334155" : "#e2e8f0"}`,
+                  cursor: "pointer",
+                  background: d ? "#1e293b" : "#f1f5f9",
+                  color: d ? "#94a3b8" : "#334155",
+                  fontWeight: 600,
+                  fontSize: 13,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirm(false);
+                  onDelete();
+                }}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: 10,
+                  border: "none",
+                  cursor: "pointer",
+                  background: "#ef4444",
+                  color: "#fff",
+                  fontWeight: 600,
+                  fontSize: 13,
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -110,6 +110,8 @@ export default function StudyVaultApp() {
   const [localValidation, setLocalValidation] = useState<any>(null);
   const [validatingLocal, setValidatingLocal] = useState(false);
   const [linkingLocal, setLinkingLocal] = useState(false);
+  const [localSelectedFile, setLocalSelectedFile] = useState<File | null>(null);
+  const localFileInputRef = useRef<HTMLInputElement>(null);
 
   // Directory Scanner states
   const [scanDirInput, setScanDirInput] = useState("");
@@ -279,23 +281,51 @@ export default function StudyVaultApp() {
 
   const handleLinkLocalPdf = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const clean = localPathInput.trim().replace(/^["']|["']$/g, "");
-    if (!clean) return;
+    if (!localSelectedFile && !localPathInput.trim()) {
+      toast.error("Please choose a file or enter a local file path");
+      return;
+    }
+
     setLinkingLocal(true);
     try {
-      const res = await fetch("/tools/study-vault/api/pdfs/local", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          localPath: clean,
-          originalName: localNameInput.trim() || undefined,
-          projectId: activeProject !== "all" ? activeProject.id : undefined,
-        }),
-      });
+      let res: Response;
+
+      if (localSelectedFile) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve((ev.target?.result as string).split(",")[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(localSelectedFile);
+        });
+
+        res = await fetch("/tools/study-vault/api/pdfs/local", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            file: base64,
+            filename: localSelectedFile.name,
+            originalName: localNameInput.trim() || localSelectedFile.name,
+            projectId: activeProject !== "all" ? activeProject.id : undefined,
+          }),
+        });
+      } else {
+        const clean = localPathInput.trim().replace(/^["']|["']$/g, "");
+        res = await fetch("/tools/study-vault/api/pdfs/local", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            localPath: clean,
+            originalName: localNameInput.trim() || undefined,
+            projectId: activeProject !== "all" ? activeProject.id : undefined,
+          }),
+        });
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || "Failed to link local PDF");
       toast.success("Local PDF linked successfully!");
       setShowLocalModal(false);
+      setLocalSelectedFile(null);
       setLocalPathInput("");
       setLocalNameInput("");
       setLocalValidation(null);
@@ -1485,37 +1515,161 @@ export default function StudyVaultApp() {
             </div>
 
             {localModalTab === "path" && (
-              <form onSubmit={handleLinkLocalPdf} className="space-y-3">
+              <form onSubmit={handleLinkLocalPdf} className="space-y-4">
+                {/* Hidden File Picker Input */}
+                <input
+                  ref={localFileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setLocalSelectedFile(file);
+                      setLocalPathInput("");
+                      setLocalValidation({
+                        valid: true,
+                        filename: file.name,
+                        size: file.size,
+                      });
+                      if (!localNameInput) {
+                        setLocalNameInput(file.name.replace(/\.pdf$/i, ""));
+                      }
+                    }
+                  }}
+                />
+
+                {/* Browse File Dropzone / Button */}
+                <div>
+                  <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                    Browse & Choose PDF from Computer:
+                  </label>
+
+                  {localSelectedFile ? (
+                    <div
+                      className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
+                        isDarkMode
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                          : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                          <BookOpen size={20} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs truncate">{localSelectedFile.name}</p>
+                          <p className="text-[11px] opacity-75">
+                            {(localSelectedFile.size / (1024 * 1024)).toFixed(2)} MB · Ready to link locally
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalSelectedFile(null);
+                          setLocalValidation(null);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition text-slate-400"
+                        title="Remove selected file"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => localFileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && (file.type === "application/pdf" || file.name.endsWith(".pdf"))) {
+                          setLocalSelectedFile(file);
+                          setLocalPathInput("");
+                          setLocalValidation({
+                            valid: true,
+                            filename: file.name,
+                            size: file.size,
+                          });
+                          if (!localNameInput) {
+                            setLocalNameInput(file.name.replace(/\.pdf$/i, ""));
+                          }
+                        }
+                      }}
+                      className={`p-5 rounded-2xl border-2 border-dashed text-center cursor-pointer transition group flex flex-col items-center justify-center gap-2 ${
+                        isDarkMode
+                          ? "border-slate-700 bg-slate-800/40 hover:border-blue-500 hover:bg-slate-800/70"
+                          : "border-slate-300 bg-slate-50/70 hover:border-blue-500 hover:bg-blue-50/30"
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Upload size={20} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                          Click to browse your computer
+                        </span>
+                        <span className={`text-xs block ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                          or drag & drop a PDF file here
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="flex items-center gap-2 my-2">
+                  <div className={`h-px flex-1 ${isDarkMode ? "bg-slate-800" : "bg-slate-200"}`} />
+                  <span className="text-[10px] uppercase font-bold text-slate-400">OR Enter File Path</span>
+                  <div className={`h-px flex-1 ${isDarkMode ? "bg-slate-800" : "bg-slate-200"}`} />
+                </div>
+
+                {/* Manual Path Input with Browse Button */}
                 <div>
                   <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                    Local PDF File Path:
+                    Local PDF File Path on Disk:
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      autoFocus
-                      value={localPathInput}
-                      onChange={(e) => {
-                        setLocalPathInput(e.target.value);
-                        validateLocalPath(e.target.value);
-                      }}
-                      placeholder="e.g. C:\Users\name\Documents\Textbook.pdf"
-                      className={`w-full px-3 py-2 text-xs font-mono rounded-xl border ${
-                        isDarkMode
-                          ? "border-slate-700 bg-slate-800 text-white placeholder-slate-500"
-                          : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"
-                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                    />
-                    {validatingLocal && (
-                      <Loader2
-                        size={14}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-400"
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={localPathInput}
+                        onChange={(e) => {
+                          setLocalPathInput(e.target.value);
+                          setLocalSelectedFile(null);
+                          validateLocalPath(e.target.value);
+                        }}
+                        placeholder="e.g. C:\Users\name\Documents\Textbook.pdf"
+                        className={`w-full px-3 py-2 text-xs font-mono rounded-xl border ${
+                          isDarkMode
+                            ? "border-slate-700 bg-slate-800 text-white placeholder-slate-500"
+                            : "border-slate-300 bg-white text-slate-900 placeholder-slate-400"
+                        } focus:outline-none focus:ring-2 focus:ring-blue-500`}
                       />
-                    )}
+                      {validatingLocal && (
+                        <Loader2
+                          size={14}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-400"
+                        />
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => localFileInputRef.current?.click()}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border transition shrink-0 flex items-center gap-1.5 ${
+                        isDarkMode
+                          ? "bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200"
+                          : "bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700"
+                      }`}
+                      title="Browse file from computer"
+                    >
+                      <HardDrive size={13} />
+                      <span>Browse…</span>
+                    </button>
                   </div>
                 </div>
 
-                {localValidation && (
+                {!localSelectedFile && localValidation && (
                   <div
                     className={`p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
                       localValidation.valid
@@ -1534,7 +1688,7 @@ export default function StudyVaultApp() {
                     )}
                     <div>
                       <p className="font-semibold">
-                        {localValidation.valid ? "Valid PDF found!" : "File not accessible"}
+                        {localValidation.valid ? "Valid PDF found on disk!" : "File not accessible"}
                       </p>
                       {localValidation.valid && (
                         <p className="text-[11px] opacity-80 mt-0.5">
@@ -1565,7 +1719,10 @@ export default function StudyVaultApp() {
                 <div className="pt-2 flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowLocalModal(false)}
+                    onClick={() => {
+                      setShowLocalModal(false);
+                      setLocalSelectedFile(null);
+                    }}
                     className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
                       isDarkMode
                         ? "bg-slate-800 hover:bg-slate-700 text-slate-300"
@@ -1576,7 +1733,7 @@ export default function StudyVaultApp() {
                   </button>
                   <button
                     type="submit"
-                    disabled={linkingLocal || !localPathInput.trim()}
+                    disabled={linkingLocal || (!localSelectedFile && !localPathInput.trim())}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2"
                   >
                     {linkingLocal ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}

@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 import cloudinary from "@/lib/cloudinary";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     const { file, filename, type, folder } = await req.json();
@@ -16,7 +12,7 @@ export async function POST(req: Request) {
     }
 
     const buffer = Buffer.from(file, "base64");
-    const uploadFolder = `tools-hub/study-vault/attachments/${session.user.id}${
+    const uploadFolder = `tools-hub/study-vault/attachments/${userId}${
       folder ? "/" + folder.replace(/[^a-zA-Z0-9_-]/g, "_") : ""
     }`;
 
@@ -52,10 +48,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     const { publicId } = await req.json();

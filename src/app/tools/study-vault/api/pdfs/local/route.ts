@@ -1,50 +1,71 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import dbConnect from "@/lib/mongodb";
 import StudyPdf from "@/app/tools/study-vault/models/StudyPdf";
-import { toPlainPdf } from "@/app/tools/study-vault/utils/apiHelper";
+import { toPlainPdf, getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
-    const body = await req.json();
+    const contentType = req.headers.get("content-type") || "";
+
+    let fileBuffer: Buffer | null = null;
+    let fileName: string = "";
+    let originalName: string = "";
+    let projectId: string | null = null;
+    let localPath: string | null = null;
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      const file = formData.get("file") as File | null;
+      if (file && typeof file !== "string") {
+        const arrayBuf = await file.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuf);
+        fileName = file.name;
+      }
+      originalName = (formData.get("originalName") as string) || fileName;
+      projectId = (formData.get("projectId") as string) || null;
+    } else {
+      const body = await req.json();
+      if (body.file) {
+        fileBuffer = Buffer.from(body.file, "base64");
+        fileName = body.filename || "document.pdf";
+      }
+      originalName = body.originalName || fileName;
+      projectId = body.projectId || null;
+      localPath = body.localPath || null;
+    }
 
     // Mode 1: File browsed and uploaded directly to local disk
-    if (body.file) {
-      const buffer = Buffer.from(body.file, "base64");
+    if (fileBuffer) {
       const localDir = path.join(
         process.cwd(),
         "uploads",
         "study-vault",
         "local-pdfs",
-        session.user.id
+        userId
       );
 
       if (!fs.existsSync(localDir)) {
         fs.mkdirSync(localDir, { recursive: true });
       }
 
-      const safeName = (body.filename || "document.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const safeName = (fileName || "document.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
       const filePath = path.join(localDir, safeName);
-      fs.writeFileSync(filePath, buffer);
+      fs.writeFileSync(filePath, fileBuffer);
 
       const displayName =
-        (body.originalName && body.originalName.trim()) || body.filename || safeName;
+        (originalName && originalName.trim()) || fileName || safeName;
       const sid = crypto.randomUUID();
 
       await dbConnect();
       const pdf = await StudyPdf.create({
         sid,
-        userId: session.user.id,
-        projectId: body.projectId || null,
+        userId,
+        projectId: projectId || null,
         storageType: "local",
         localPath: filePath,
         filename: displayName,
@@ -57,7 +78,6 @@ export async function POST(req: Request) {
     }
 
     // Mode 2: Link direct disk path
-    const { localPath, originalName, projectId } = body;
     if (!localPath || !localPath.trim()) {
       return NextResponse.json({ error: "localPath or file is required" }, { status: 400 });
     }
@@ -93,7 +113,7 @@ export async function POST(req: Request) {
     await dbConnect();
     const pdf = await StudyPdf.create({
       sid,
-      userId: session.user.id,
+      userId,
       projectId: projectId || null,
       storageType: "local",
       localPath: resolvedPath,

@@ -1,21 +1,16 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import dbConnect from "@/lib/mongodb";
 import StudyPdf from "@/app/tools/study-vault/models/StudyPdf";
-import { toPlainPdf } from "@/app/tools/study-vault/utils/apiHelper";
+import { toPlainPdf, getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 import cloudinary from "@/lib/cloudinary";
 import crypto from "crypto";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     await dbConnect();
-    const pdfs = await StudyPdf.find({ userId: session.user.id }).sort({ uploadedAt: -1 });
+    const pdfs = await StudyPdf.find({ userId }).sort({ uploadedAt: -1 });
     return NextResponse.json(pdfs.map(toPlainPdf), { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -23,10 +18,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     const { file, originalName, projectId } = await req.json();
@@ -46,7 +38,7 @@ export async function POST(req: Request) {
     const sid = crypto.randomUUID();
     const pdf = await StudyPdf.create({
       sid,
-      userId: session.user.id,
+      userId,
       projectId: projectId || null,
       storageType: "cloudinary",
       filename: uploadResult.secure_url,

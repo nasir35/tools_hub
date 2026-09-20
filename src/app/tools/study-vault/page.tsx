@@ -280,7 +280,10 @@ export default function StudyVaultApp() {
   }, [localNameInput]);
 
   const handleLinkLocalPdf = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!localSelectedFile && !localPathInput.trim()) {
       toast.error("Please choose a file or enter a local file path");
       return;
@@ -291,22 +294,20 @@ export default function StudyVaultApp() {
       let res: Response;
 
       if (localSelectedFile) {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (ev) => resolve((ev.target?.result as string).split(",")[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(localSelectedFile);
-        });
+        const formData = new FormData();
+        formData.append("file", localSelectedFile);
+        formData.append("filename", localSelectedFile.name);
+        formData.append(
+          "originalName",
+          localNameInput.trim() || localSelectedFile.name.replace(/\.pdf$/i, "")
+        );
+        if (activeProject && activeProject !== "all") {
+          formData.append("projectId", activeProject.id);
+        }
 
         res = await fetch("/tools/study-vault/api/pdfs/local", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            file: base64,
-            filename: localSelectedFile.name,
-            originalName: localNameInput.trim() || localSelectedFile.name,
-            projectId: activeProject !== "all" ? activeProject.id : undefined,
-          }),
+          body: formData,
         });
       } else {
         const clean = localPathInput.trim().replace(/^["']|["']$/g, "");
@@ -316,7 +317,7 @@ export default function StudyVaultApp() {
           body: JSON.stringify({
             localPath: clean,
             originalName: localNameInput.trim() || undefined,
-            projectId: activeProject !== "all" ? activeProject.id : undefined,
+            projectId: activeProject && activeProject !== "all" ? activeProject.id : undefined,
           }),
         });
       }
@@ -1732,12 +1733,22 @@ export default function StudyVaultApp() {
                     Cancel
                   </button>
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleLinkLocalPdf}
                     disabled={linkingLocal || (!localSelectedFile && !localPathInput.trim())}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2"
                   >
-                    {linkingLocal ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                    <span>Link Document</span>
+                    {linkingLocal ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Linking PDF...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={13} />
+                        <span>{localSelectedFile ? "Link Selected File" : "Link Document"}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

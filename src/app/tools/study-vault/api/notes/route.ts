@@ -1,23 +1,18 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import dbConnect from "@/lib/mongodb";
 import Note from "@/app/tools/study-vault/models/Note";
-import { toPlainNote } from "@/app/tools/study-vault/utils/apiHelper";
+import { toPlainNote, getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 import crypto from "crypto";
 
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
 
   try {
     await dbConnect();
-    const query: any = { userId: session.user.id };
+    const query: any = { userId };
     if (projectId && projectId !== "all") {
       query.projectId = projectId;
     }
@@ -30,10 +25,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     const body = await req.json();
@@ -42,7 +34,7 @@ export async function POST(req: Request) {
     await dbConnect();
     const note = await Note.create({
       nid,
-      userId: session.user.id,
+      userId,
       projectId: body.projectId || null,
       title: body.title || "",
       content: body.content || "",

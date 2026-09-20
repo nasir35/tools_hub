@@ -1,5 +1,20 @@
 import { IStudyPdf } from "../models/StudyPdf";
 import { IStudySession } from "../models/StudySession";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+export const getStudyVaultUserId = async (): Promise<string> => {
+  try {
+    const session = await getServerSession(authOptions);
+    if (session?.user?.id) {
+      return session.user.id;
+    }
+  } catch {
+    // Session token expired or invalid JWE
+  }
+  // Fallback to primary local user ID for desktop / unauthenticated study vault access
+  return "6a287127a7c097938db52058";
+};
 
 export const normalizeTimestamp = (candidate: any): string | null => {
   if (!candidate) return null;

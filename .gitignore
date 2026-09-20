@@ -42,3 +42,4 @@ next-env.d.ts
 
 # local scripts (seed scripts, one-off utilities)
 /scripts
+/uploads

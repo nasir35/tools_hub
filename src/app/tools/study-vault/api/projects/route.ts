@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import dbConnect from "@/lib/mongodb";
 import Project from "@/app/tools/study-vault/models/Project";
-import { toPlainProject } from "@/app/tools/study-vault/utils/apiHelper";
+import { toPlainProject, getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 import crypto from "crypto";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     await dbConnect();
-    const projects = await Project.find({ userId: session.user.id }).sort({ createdAt: -1 });
+    const projects = await Project.find({ userId }).sort({ createdAt: -1 });
     return NextResponse.json(projects.map(toPlainProject), { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -22,10 +17,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     const { name, color } = await req.json();
@@ -37,7 +29,7 @@ export async function POST(req: Request) {
     await dbConnect();
     const project = await Project.create({
       pid,
-      userId: session.user.id,
+      userId,
       name: name.trim(),
       color: color || "#6366f1",
     });
@@ -47,3 +39,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

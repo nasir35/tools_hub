@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import dbConnect from "@/lib/mongodb";
 import StudyTime from "@/app/tools/study-vault/models/StudyTime";
+import { getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 import crypto from "crypto";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     await dbConnect();
-    const times = await StudyTime.find({ userId: session.user.id }).sort({ date: -1 });
+    const times = await StudyTime.find({ userId }).sort({ date: -1 });
     return NextResponse.json(
       times.map((t) => ({
         id: t.stid,
@@ -32,10 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await getStudyVaultUserId();
 
   try {
     const { pdfId, pdfName, sessionId, duration, date } = await req.json();
@@ -47,7 +40,7 @@ export async function POST(req: Request) {
     const stid = crypto.randomUUID();
     const record = await StudyTime.create({
       stid,
-      userId: session.user.id,
+      userId,
       pdfId: pdfId || null,
       pdfName: pdfName || "",
       sessionId: sessionId || null,
@@ -60,3 +53,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

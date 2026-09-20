@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import dbConnect from "@/lib/mongodb";
 import Note from "@/app/tools/study-vault/models/Note";
-import { toPlainNote } from "@/app/tools/study-vault/utils/apiHelper";
+import { toPlainNote, getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  const userId = await getStudyVaultUserId();
   const { id } = await params;
 
   try {
     await dbConnect();
-    const note = await Note.findOne({ nid: id, userId: session.user.id });
+    const note = await Note.findOne({ nid: id, userId });
     if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
     return NextResponse.json(toPlainNote(note), { status: 200 });
   } catch (error: any) {
@@ -30,11 +24,7 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  const userId = await getStudyVaultUserId();
   const { id } = await params;
 
   try {
@@ -51,7 +41,7 @@ export async function PUT(
     if (body.pinned !== undefined) updateFields.pinned = body.pinned;
 
     const note = await Note.findOneAndUpdate(
-      { nid: id, userId: session.user.id },
+      { nid: id, userId },
       { $set: updateFields },
       { new: true }
     );
@@ -67,19 +57,16 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  const userId = await getStudyVaultUserId();
   const { id } = await params;
 
   try {
     await dbConnect();
-    const note = await Note.findOneAndDelete({ nid: id, userId: session.user.id });
+    const note = await Note.findOneAndDelete({ nid: id, userId });
     if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

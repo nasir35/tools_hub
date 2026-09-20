@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongodb";
 import StudyPdf from "@/app/tools/study-vault/models/StudyPdf";
 import { getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
 import fs from "fs";
+import path from "path";
 import { Readable } from "stream";
 
 export async function GET(
@@ -21,13 +22,37 @@ export async function GET(
     // ── Local File Streaming ──
     const isLocal = pdf.storageType === "local" || (pdf.localPath && !pdf.filename?.startsWith("http"));
     if (isLocal) {
-      const filePath = pdf.localPath;
+      let filePath = pdf.localPath;
+
+      // If filePath does not exist directly, search candidate fallback locations
+      if (!filePath || !fs.existsSync(filePath)) {
+        const baseName = filePath
+          ? path.basename(filePath)
+          : pdf.filename
+          ? path.basename(pdf.filename)
+          : "";
+
+        const candidates = [
+          filePath ? path.resolve(process.cwd(), filePath) : null,
+          baseName ? path.join(process.cwd(), "uploads", "study-vault", "local-pdfs", pdf.userId || "", baseName) : null,
+          baseName ? path.join(process.cwd(), "uploads", "study-vault", "local-pdfs", userId, baseName) : null,
+          baseName ? path.join(process.cwd(), "uploads", "study-vault", "local-pdfs", baseName) : null,
+        ].filter(Boolean) as string[];
+
+        const found = candidates.find((cand) => fs.existsSync(cand));
+        if (found) {
+          filePath = found;
+          // Self-heal the database record with the working path
+          StudyPdf.updateOne({ sid: id }, { $set: { localPath: found } }).exec().catch(() => {});
+        }
+      }
+
       if (!filePath || !fs.existsSync(filePath)) {
         return NextResponse.json(
           {
             error: "LOCAL_FILE_NOT_FOUND",
             message: "Local PDF file was not found at the saved path. It may have been moved, renamed, or the drive was unmounted.",
-            savedPath: filePath || "Unknown path",
+            savedPath: filePath || pdf.localPath || "Unknown path",
             documentId: pdf.sid,
             originalName: pdf.originalName,
           },

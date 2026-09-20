@@ -9,7 +9,7 @@ import React, {
   useImperativeHandle,
 } from "react";
 import * as pdfjsLib from "pdfjs-dist";
-import { AlertTriangle, HardDrive, RefreshCw, Check } from "lucide-react";
+import { AlertTriangle, HardDrive, RefreshCw, Check, Upload, X, BookOpen, RotateCw } from "lucide-react";
 import { Annotation } from "../utils/types";
 
 // Helper: Convert point to normalized coordinates (0.0 to 1.0)
@@ -571,6 +571,8 @@ export const StudyPDFRenderer = forwardRef<StudyPDFRendererRef, StudyPDFRenderer
 
   // Relink state
   const [newLocalPath, setNewLocalPath] = useState("");
+  const [selectedRelinkFile, setSelectedRelinkFile] = useState<File | null>(null);
+  const relinkFileInputRef = useRef<HTMLInputElement>(null);
   const [relinking, setRelinking] = useState(false);
   const [relinkError, setRelinkError] = useState("");
 
@@ -594,23 +596,35 @@ export const StudyPDFRenderer = forwardRef<StudyPDFRendererRef, StudyPDFRenderer
     });
   }, [onHistoryChange]);
 
-  const handleRelink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = newLocalPath.trim().replace(/^["']|["']$/g, "");
-    if (!clean) return;
+  const handleRelink = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedRelinkFile && !newLocalPath.trim()) return;
 
     setRelinking(true);
     setRelinkError("");
     try {
-      const res = await fetch(`/tools/study-vault/api/pdfs/${pdfId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ localPath: clean }),
-      });
+      let res: Response;
+      if (selectedRelinkFile) {
+        const formData = new FormData();
+        formData.append("file", selectedRelinkFile);
+        res = await fetch(`/tools/study-vault/api/pdfs/${pdfId}`, {
+          method: "PUT",
+          body: formData,
+        });
+      } else {
+        const clean = newLocalPath.trim().replace(/^["']|["']$/g, "");
+        res = await fetch(`/tools/study-vault/api/pdfs/${pdfId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ localPath: clean }),
+        });
+      }
+
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message || data.error || "Failed to update file path");
       }
+      setSelectedRelinkFile(null);
       setMissingFileInfo(null);
       setError(null);
       setReloadKey((k) => k + 1);
@@ -872,46 +886,172 @@ export const StudyPDFRenderer = forwardRef<StudyPDFRendererRef, StudyPDFRenderer
               </p>
             </div>
 
-            <form onSubmit={handleRelink} className="w-full space-y-3">
+            <form onSubmit={handleRelink} className="w-full space-y-3.5">
+              {/* Hidden File Picker Input */}
+              <input
+                ref={relinkFileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setSelectedRelinkFile(file);
+                    setNewLocalPath("");
+                    if (relinkError) setRelinkError("");
+                  }
+                }}
+              />
+
+              {/* Option 1: Browse / Upload Replacement File */}
+              <div className="text-left">
+                <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  Browse & Replace PDF from Computer:
+                </label>
+
+                {selectedRelinkFile ? (
+                  <div
+                    className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 ${
+                      isDarkMode
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                        <BookOpen size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-xs truncate">{selectedRelinkFile.name}</p>
+                        <p className="text-[11px] opacity-75">
+                          {(selectedRelinkFile.size / (1024 * 1024)).toFixed(2)} MB · Ready to upload & open
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRelinkFile(null)}
+                      className="p-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition text-slate-400"
+                      title="Remove file"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => relinkFileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file && (file.type === "application/pdf" || file.name.endsWith(".pdf"))) {
+                        setSelectedRelinkFile(file);
+                        setNewLocalPath("");
+                        if (relinkError) setRelinkError("");
+                      }
+                    }}
+                    className={`p-4 rounded-xl border-2 border-dashed text-center cursor-pointer transition group flex flex-col items-center justify-center gap-1.5 ${
+                      isDarkMode
+                        ? "border-slate-700 bg-slate-800/40 hover:border-blue-500 hover:bg-slate-800/70"
+                        : "border-slate-300 bg-slate-50/70 hover:border-blue-500 hover:bg-blue-50/30"
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Upload size={16} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                        Click to browse replacement PDF
+                      </span>
+                      <span className={`text-[11px] block ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                        or drag & drop file here
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-2 my-1">
+                <div className={`h-px flex-1 ${isDarkMode ? "bg-slate-800" : "bg-slate-200"}`} />
+                <span className="text-[10px] uppercase font-bold text-slate-400">OR Relink Disk Path</span>
+                <div className={`h-px flex-1 ${isDarkMode ? "bg-slate-800" : "bg-slate-200"}`} />
+              </div>
+
+              {/* Option 2: Enter Disk Path with Browse Button */}
               <div className="text-left">
                 <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
-                  Relink to New Path:
+                  Local File Path on Disk:
                 </label>
-                <input
-                  type="text"
-                  value={newLocalPath}
-                  onChange={(e) => {
-                    setNewLocalPath(e.target.value);
-                    if (relinkError) setRelinkError("");
-                  }}
-                  placeholder="e.g. C:\Users\name\Documents\document.pdf"
-                  className={`w-full px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isDarkMode ? "bg-slate-950 border-slate-700 text-white" : "bg-white border-gray-300 text-gray-900"
-                  }`}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newLocalPath}
+                    onChange={(e) => {
+                      setNewLocalPath(e.target.value);
+                      setSelectedRelinkFile(null);
+                      if (relinkError) setRelinkError("");
+                    }}
+                    placeholder="e.g. C:\Users\name\Documents\document.pdf"
+                    className={`flex-1 px-3 py-2 text-xs font-mono rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      isDarkMode ? "bg-slate-950 border-slate-700 text-white" : "bg-white border-gray-300 text-gray-900"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => relinkFileInputRef.current?.click()}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition shrink-0 flex items-center gap-1.5 ${
+                      isDarkMode
+                        ? "bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200"
+                        : "bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700"
+                    }`}
+                    title="Browse file from computer"
+                  >
+                    <HardDrive size={13} />
+                    <span>Browse…</span>
+                  </button>
+                </div>
               </div>
 
               {relinkError && (
                 <p className="text-xs text-red-400 text-left font-medium">{relinkError}</p>
               )}
 
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <button
                   type="submit"
-                  disabled={relinking || !newLocalPath.trim()}
+                  disabled={relinking || (!selectedRelinkFile && !newLocalPath.trim())}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-sm transition"
                 >
                   {relinking ? (
                     <>
                       <RefreshCw size={13} className="animate-spin" />
-                      <span>Verifying & Relinking…</span>
+                      <span>Verifying & Opening…</span>
                     </>
                   ) : (
                     <>
                       <Check size={13} />
-                      <span>Update Path & Open</span>
+                      <span>{selectedRelinkFile ? "Upload & Open PDF" : "Update Path & Open"}</span>
                     </>
                   )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMissingFileInfo(null);
+                    setError(null);
+                    setReloadKey((k) => k + 1);
+                  }}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5 ${
+                    isDarkMode
+                      ? "bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200"
+                      : "bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700"
+                  }`}
+                  title="Retry loading current file"
+                >
+                  <RotateCw size={13} />
+                  <span>Retry Loading</span>
                 </button>
               </div>
             </form>

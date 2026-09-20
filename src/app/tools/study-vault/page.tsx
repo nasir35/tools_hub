@@ -134,6 +134,8 @@ export default function StudyVaultApp() {
   const [editingPdf, setEditingPdf] = useState<PdfEntry | null>(null);
   const [editPdfName, setEditPdfName] = useState("");
   const [editPdfLocalPath, setEditPdfLocalPath] = useState("");
+  const [editPdfFile, setEditPdfFile] = useState<File | null>(null);
+  const editPdfFileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -452,19 +454,33 @@ export default function StudyVaultApp() {
     e.preventDefault();
     if (!editingPdf) return;
     try {
-      const res = await fetch(`/tools/study-vault/api/pdfs/${editingPdf.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          originalName: editPdfName.trim() || undefined,
-          localPath:
-            editingPdf.storageType === "local" ? editPdfLocalPath.trim() || undefined : undefined,
-        }),
-      });
+      let res: Response;
+      if (editPdfFile) {
+        const formData = new FormData();
+        formData.append("file", editPdfFile);
+        if (editPdfName.trim()) {
+          formData.append("originalName", editPdfName.trim());
+        }
+        res = await fetch(`/tools/study-vault/api/pdfs/${editingPdf.id}`, {
+          method: "PUT",
+          body: formData,
+        });
+      } else {
+        res = await fetch(`/tools/study-vault/api/pdfs/${editingPdf.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            originalName: editPdfName.trim() || undefined,
+            localPath:
+              editingPdf.storageType === "local" ? editPdfLocalPath.trim() || undefined : undefined,
+          }),
+        });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || "Update failed");
       toast.success("Document updated!");
       setEditingPdf(null);
+      setEditPdfFile(null);
       await fetchAll();
     } catch (err: any) {
       toast.error(err.message || "Failed to update document");
@@ -1891,21 +1907,121 @@ export default function StudyVaultApp() {
               </div>
 
               {editingPdf.storageType === "local" && (
-                <div>
-                  <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                    Local File Path:
-                  </label>
+                <div className="space-y-3 pt-1">
+                  {/* Hidden File Picker Input */}
                   <input
-                    type="text"
-                    value={editPdfLocalPath}
-                    onChange={(e) => setEditPdfLocalPath(e.target.value)}
-                    placeholder="e.g. C:\Docs\Book.pdf"
-                    className={`w-full px-3 py-2 text-xs font-mono rounded-xl border ${
-                      isDarkMode
-                        ? "border-slate-700 bg-slate-800 text-white"
-                        : "border-slate-300 bg-white text-slate-900"
-                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    ref={editPdfFileInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setEditPdfFile(file);
+                        setEditPdfLocalPath("");
+                        if (!editPdfName) {
+                          setEditPdfName(file.name.replace(/\.pdf$/i, ""));
+                        }
+                      }
+                    }}
                   />
+
+                  {/* Browse & Replace PDF */}
+                  <div>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                      Browse & Replace PDF from Computer:
+                    </label>
+
+                    {editPdfFile ? (
+                      <div
+                        className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 ${
+                          isDarkMode
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                            : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                            <BookOpen size={16} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs truncate">{editPdfFile.name}</p>
+                            <p className="text-[10px] opacity-75">
+                              {(editPdfFile.size / (1024 * 1024)).toFixed(2)} MB · Ready to upload
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditPdfFile(null)}
+                          className="p-1 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 transition text-slate-400"
+                          title="Remove file"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => editPdfFileInputRef.current?.click()}
+                        className={`p-3.5 rounded-xl border-2 border-dashed text-center cursor-pointer transition flex flex-col items-center justify-center gap-1 group ${
+                          isDarkMode
+                            ? "border-slate-700 bg-slate-800/40 hover:border-blue-500 hover:bg-slate-800/70"
+                            : "border-slate-300 bg-slate-50/70 hover:border-blue-500 hover:bg-blue-50/30"
+                        }`}
+                      >
+                        <Upload size={16} className="text-blue-500 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                          Click to browse new PDF file
+                        </span>
+                        <span className={`text-[10px] ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                          Replaces file locally on your disk
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="flex items-center gap-2 my-1">
+                    <div className={`h-px flex-1 ${isDarkMode ? "bg-slate-800" : "bg-slate-200"}`} />
+                    <span className="text-[10px] uppercase font-bold text-slate-400">OR Relink Disk Path</span>
+                    <div className={`h-px flex-1 ${isDarkMode ? "bg-slate-800" : "bg-slate-200"}`} />
+                  </div>
+
+                  {/* Manual Path Input + Dedicated Browse Button */}
+                  <div>
+                    <label className={`block text-xs font-semibold mb-1 ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                      Local File Path on Disk:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editPdfLocalPath}
+                        onChange={(e) => {
+                          setEditPdfLocalPath(e.target.value);
+                          setEditPdfFile(null);
+                        }}
+                        placeholder="e.g. C:\Docs\Book.pdf"
+                        className={`flex-1 px-3 py-2 text-xs font-mono rounded-xl border ${
+                          isDarkMode
+                            ? "border-slate-700 bg-slate-800 text-white"
+                            : "border-slate-300 bg-white text-slate-900"
+                        } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => editPdfFileInputRef.current?.click()}
+                        className={`px-3 py-2 rounded-xl text-xs font-semibold border transition shrink-0 flex items-center gap-1.5 ${
+                          isDarkMode
+                            ? "bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200"
+                            : "bg-slate-100 border-slate-200 hover:bg-slate-200 text-slate-700"
+                        }`}
+                        title="Browse file from computer"
+                      >
+                        <HardDrive size={13} />
+                        <span>Browse…</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

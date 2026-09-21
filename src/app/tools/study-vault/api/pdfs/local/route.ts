@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import StudyPdf from "@/app/tools/study-vault/models/StudyPdf";
 import { toPlainPdf, getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
-import fs from "fs";
-import path from "path";
+import cloudinary from "@/lib/cloudinary";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
@@ -39,26 +38,27 @@ export async function POST(req: Request) {
       localPath = body.localPath || null;
     }
 
-    // Mode 1: File browsed and uploaded directly to local disk
+    // Mode 1: File browsed and uploaded — store in Cloudinary
     if (fileBuffer) {
-      const localDir = path.join(
-        process.cwd(),
-        "uploads",
-        "study-vault",
-        "local-pdfs",
-        userId
-      );
-
-      if (!fs.existsSync(localDir)) {
-        fs.mkdirSync(localDir, { recursive: true });
-      }
-
-      const safeName = (fileName || "document.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
-      const filePath = path.join(localDir, safeName);
-      fs.writeFileSync(filePath, fileBuffer);
-
       const displayName =
-        (originalName && originalName.trim()) || fileName || safeName;
+        (originalName && originalName.trim()) || fileName || "document.pdf";
+
+      // Upload to Cloudinary via stream
+      const uploadResult = await new Promise<any>((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: `study-pdfs/${userId}`,
+            resource_type: "raw",
+            public_id: `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`,
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        uploadStream.end(fileBuffer);
+      });
+
       const sid = crypto.randomUUID();
 
       await dbConnect();
@@ -66,9 +66,9 @@ export async function POST(req: Request) {
         sid,
         userId,
         projectId: projectId || null,
-        storageType: "local",
-        localPath: filePath,
-        filename: displayName,
+        storageType: "cloudinary",
+        filename: uploadResult.secure_url,
+        cloudinaryId: uploadResult.public_id,
         originalName: displayName,
         uploadedAt: new Date(),
         studyData: { annotations: [], snips: [], updatedAt: null, lastOpenedAt: null },
@@ -77,37 +77,13 @@ export async function POST(req: Request) {
       return NextResponse.json(toPlainPdf(pdf), { status: 201 });
     }
 
-    // Mode 2: Link direct disk path
+    // Mode 2: Link direct disk path (reference only — for local dev)
     if (!localPath || !localPath.trim()) {
       return NextResponse.json({ error: "localPath or file is required" }, { status: 400 });
     }
 
     const cleanPath = localPath.trim().replace(/^["']|["']$/g, "");
-    const resolvedPath = path.resolve(cleanPath);
-
-    if (!fs.existsSync(resolvedPath)) {
-      return NextResponse.json(
-        { error: "FILE_NOT_FOUND", message: `File does not exist on disk at: ${resolvedPath}` },
-        { status: 404 }
-      );
-    }
-
-    const stat = fs.statSync(resolvedPath);
-    if (!stat.isFile()) {
-      return NextResponse.json(
-        { error: "The provided path is a directory, not a file." },
-        { status: 400 }
-      );
-    }
-
-    if (!resolvedPath.toLowerCase().endsWith(".pdf")) {
-      return NextResponse.json(
-        { error: "Selected file must be a .pdf document." },
-        { status: 400 }
-      );
-    }
-
-    const displayName = (originalName && originalName.trim()) || path.basename(resolvedPath);
+    const displayName = (originalName && originalName.trim()) || cleanPath.split(/[/\\]/).pop() || "document.pdf";
     const sid = crypto.randomUUID();
 
     await dbConnect();
@@ -116,7 +92,7 @@ export async function POST(req: Request) {
       userId,
       projectId: projectId || null,
       storageType: "local",
-      localPath: resolvedPath,
+      localPath: cleanPath,
       filename: displayName,
       originalName: displayName,
       uploadedAt: new Date(),

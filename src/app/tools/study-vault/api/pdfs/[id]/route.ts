@@ -3,8 +3,7 @@ import dbConnect from "@/lib/mongodb";
 import StudyPdf from "@/app/tools/study-vault/models/StudyPdf";
 import StudySession from "@/app/tools/study-vault/models/StudySession";
 import { toPlainPdf, getStudyVaultUserId } from "@/app/tools/study-vault/utils/apiHelper";
-import path from "path";
-import fs from "fs";
+import cloudinary from "@/lib/cloudinary";
 
 export async function GET(
   req: Request,
@@ -71,26 +70,29 @@ export async function PUT(
     const pdf = await StudyPdf.findOne({ sid: id, userId });
     if (!pdf) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Handle replacement file upload
+    // Handle replacement file upload — upload to Cloudinary
     if (fileBuffer) {
-      const localDir = path.join(
-        process.cwd(),
-        "uploads",
-        "study-vault",
-        "local-pdfs",
-        userId
-      );
-      if (!fs.existsSync(localDir)) {
-        fs.mkdirSync(localDir, { recursive: true });
-      }
-
       const safeName = (fileName || "document.pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
-      const filePath = path.join(localDir, safeName);
-      fs.writeFileSync(filePath, fileBuffer);
 
-      pdf.localPath = filePath;
-      pdf.storageType = "local";
-      pdf.filename = safeName;
+      const uploadResult = await new Promise<any>((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: `study-pdfs/${userId}`,
+            resource_type: "raw",
+            public_id: `${Date.now()}_${safeName}`,
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        );
+        uploadStream.end(fileBuffer);
+      });
+
+      pdf.localPath = null;
+      pdf.storageType = "cloudinary";
+      pdf.filename = uploadResult.secure_url;
+      pdf.cloudinaryId = uploadResult.public_id;
       if (originalName) pdf.originalName = originalName;
     }
 
@@ -99,7 +101,7 @@ export async function PUT(
     if (localPath !== undefined && !fileBuffer) {
       const raw = localPath;
       if (raw && raw.trim()) {
-        pdf.localPath = path.resolve(raw.trim().replace(/^["']|["']$/g, ""));
+        pdf.localPath = raw.trim().replace(/^["']|["']$/g, "");
         pdf.storageType = "local";
       } else {
         pdf.localPath = null;

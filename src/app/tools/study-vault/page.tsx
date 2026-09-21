@@ -32,7 +32,7 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import toast, { Toaster } from "react-hot-toast";
 import {
   NoteEntry,
   ProjectEntry,
@@ -110,6 +110,7 @@ export default function StudyVaultApp() {
   const [localValidation, setLocalValidation] = useState<any>(null);
   const [validatingLocal, setValidatingLocal] = useState(false);
   const [linkingLocal, setLinkingLocal] = useState(false);
+  const [linkError, setLinkError] = useState("");
   const [localSelectedFile, setLocalSelectedFile] = useState<File | null>(null);
   const localFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -287,11 +288,14 @@ export default function StudyVaultApp() {
       e.stopPropagation();
     }
     if (!localSelectedFile && !localPathInput.trim()) {
-      toast.error("Please choose a file or enter a local file path");
+      const msg = "Please choose a file or enter a local file path";
+      toast.error(msg);
+      setLinkError(msg);
       return;
     }
 
     setLinkingLocal(true);
+    setLinkError("");
     try {
       let res: Response;
 
@@ -327,6 +331,7 @@ export default function StudyVaultApp() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || "Failed to link local PDF");
       toast.success("Local PDF linked successfully!");
+      setLinkError("");
       setShowLocalModal(false);
       setLocalSelectedFile(null);
       setLocalPathInput("");
@@ -334,7 +339,9 @@ export default function StudyVaultApp() {
       setLocalValidation(null);
       await fetchAll();
     } catch (err: any) {
-      toast.error(err.message || "Failed to link local PDF");
+      const msg = err.message || "Failed to link local PDF";
+      toast.error(msg);
+      setLinkError(msg);
     } finally {
       setLinkingLocal(false);
     }
@@ -1042,7 +1049,7 @@ export default function StudyVaultApp() {
                   type="button"
                   onClick={() => {
                     setLocalModalTab("path");
-                    setShowLocalModal(true);
+                    setLinkError(""); setShowLocalModal(true);
                   }}
                   className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
                 >
@@ -1054,7 +1061,7 @@ export default function StudyVaultApp() {
                   type="button"
                   onClick={() => {
                     setLocalModalTab("scan");
-                    setShowLocalModal(true);
+                    setLinkError(""); setShowLocalModal(true);
                   }}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 border rounded-xl text-xs font-semibold transition ${
                     isDarkMode
@@ -1163,7 +1170,7 @@ export default function StudyVaultApp() {
                       type="button"
                       onClick={() => {
                         setLocalModalTab("path");
-                        setShowLocalModal(true);
+                        setLinkError(""); setShowLocalModal(true);
                       }}
                       className={`p-4 rounded-2xl border text-left transition flex flex-col items-center text-center gap-2 group ${
                         isDarkMode
@@ -1184,7 +1191,7 @@ export default function StudyVaultApp() {
                       type="button"
                       onClick={() => {
                         setLocalModalTab("scan");
-                        setShowLocalModal(true);
+                        setLinkError(""); setShowLocalModal(true);
                       }}
                       className={`p-4 rounded-2xl border text-left transition flex flex-col items-center text-center gap-2 group ${
                         isDarkMode
@@ -1733,6 +1740,15 @@ export default function StudyVaultApp() {
                   />
                 </div>
 
+                {linkError && (
+                  <div className={`p-3 rounded-xl text-xs font-medium flex items-start gap-2 ${
+                    isDarkMode ? "bg-red-500/10 text-red-400 border border-red-500/20" : "bg-red-50 text-red-600 border border-red-200"
+                  }`}>
+                    <span className="shrink-0 mt-0.5">⚠</span>
+                    <span>{linkError}</span>
+                  </div>
+                )}
+
                 <div className="pt-2 flex justify-end gap-2">
                   <button
                     type="button"
@@ -2144,6 +2160,18 @@ export default function StudyVaultApp() {
           </div>
         </div>
       )}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            borderRadius: "12px",
+            background: isDarkMode ? "#1e293b" : "#fff",
+            color: isDarkMode ? "#e2e8f0" : "#1e293b",
+            fontSize: "13px",
+            border: isDarkMode ? "1px solid #334155" : "1px solid #e2e8f0",
+          },
+        }}
+      />
     </div>
   );
 }
